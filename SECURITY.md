@@ -32,6 +32,8 @@ as small as possible:
 | F8 | Google Fonts leaks every child's IP address to Google | Heebo is self-hosted (`@fontsource/heebo`); verified: zero requests to other hosts |
 | F9 | No browser hardening | Hosting headers: strict CSP, HSTS, `nosniff`, no framing, `Referrer-Policy`, `Permissions-Policy`. Verified in Chromium that the page loads under the CSP and that an injected inline script is blocked. **Re-test with Google sign-in in a real browser in phase 7.** |
 | F10 | Secrets in git | History scanned: no keys. `.env*`, service accounts and emulator logs are git-ignored. |
+| F12 | Strangers with a leaked invite code | Teacher confirmation and removal enforced in rules (tests: pending, removed students) |
+| F13 | Weak teacher accounts | Teachers: Google sign-in with verified e-mail only (rules, tested) |
 | F11 | `npm audit` reports `@grpc/grpc-js` | Checked: used only by the Node build, not in the browser bundle. Do not run `npm audit fix --force` (it would downgrade Firebase to v9). Re-audit when Cloud Functions are added. |
 
 ## 3. Requirements for the phases still to build
@@ -41,7 +43,7 @@ as small as possible:
   - Codes: 6 characters, `crypto` random, unambiguous alphabet (no 0/O/1/I).
   - Rate-limit wrong guesses per user (e.g. 5 per hour, then lock out) and per IP. Brute force over about 10^9 codes would otherwise let a stranger attach to a teacher.
   - Same answer for "no such code" and "code locked". Enforce App Check. Do not log codes.
-  - Sets `teacherId` **and** `teacherName` on the student (Functions only; rules already forbid the client).
+  - Sets `teacherId`, `teacherName` and `linkStatus: pending` on the student (Functions only; rules already forbid the client). Approve / reject / remove / regenerate-code are also Functions that check the caller is that teacher.
 - **Teacher approval function**
   - Verify the `admin` claim and `email_verified` of the caller; verify the target is a `pending` teacher; do it in one transaction; generate the code with collision retry.
   - The admin list needs the teacher's e-mail, which is not stored in Firestore: return it from a callable function using the Admin SDK instead of copying it into the database.
@@ -60,12 +62,16 @@ as small as possible:
 - Never navigate to a Storage URL; show images through `<img>`, audio through `<audio>`.
 - **Download tokens:** `getDownloadURL()` creates a permanent link that works for anyone who has it, bypassing our rules. For children's recordings and sheet music do not use it. Use `getBlob()` (needs a CORS setting on the bucket, done in phase 7) or a Cloud Function that issues a short-lived signed URL, plus a Function that strips `firebaseStorageDownloadTokens` from every uploaded object.
 
+### Deletion (phase 1, step 8)
+- Functions: delete own account (re-login required, typed confirmation), owner deletes any user, parent withdraws consent from the e-mail link. Delete Storage objects and Firestore documents together; delete the Auth user last. Idempotent and resumable (a half-finished deletion can be re-run). Tests in the emulator that nothing of the user is left.
+- The parent's link ("manage / withdraw") is a separate long-lived token, stored hashed, usable only to withdraw consent or delete that child's data.
+
 ### Phases 3–4 (practice, recording)
 - Microphone rules from section 1. Replace/discard flow exactly as in `CLAUDE.md`.
 - Check the file really is audio on the server (Storage "finalize" function: magic bytes, size) because the declared type is client-chosen.
 
 ### Phase 5–6
-- Teacher queries always filter by `teacherId`; student queries by `studentId` (the rules depend on it). No listeners on whole collections.
+- Teacher queries on assignments and practice logs filter by `teacherId` **and one `studentId`** (one query per student; the rules depend on it). Student queries filter by `studentId`. No listeners on whole collections.
 
 ### Phase 7 (going live)
 - Enforce **App Check** on Firestore, Storage, Functions and Auth (reCAPTCHA). This is the main defence against scripted abuse and cost attacks, because rules cannot rate-limit.
@@ -78,17 +84,30 @@ as small as possible:
 - Deploy rules only from a commit where `npm run test:rules` passes.
 - Real-browser test of the final CSP, including Google sign-in, Firestore, Storage and recording on iPhone Safari and Android Chrome.
 
-## 4. Decisions needed from the owner
+## 4. Owner decisions
 
-| # | Question | Recommendation |
+Decided:
+
+| # | Decision | Where it is enforced |
 |---|---|---|
-| D1 | A student who types a valid code is linked immediately. A stranger who gets a code (it is shared on WhatsApp) becomes "a student" and can upload audio to the teacher. Should the teacher confirm each new student? | **Yes**: new students appear as "pending" and the teacher taps approve. |
-| D2 | Can a teacher remove a student, and regenerate their code if it leaks? (Not in the spec.) | Yes, both. |
-| D3 | The date of birth is self-declared. A child can enter an adult date and skip parental consent. | The teacher sees the age and a "self-declared" note, and can mark a student as a minor (which requires parent consent). |
-| D4 | Deleting data: parents and adults have the right to ask for deletion. Today nothing can be deleted by design. | Add an owner-run (later: in-app) account deletion that also removes recordings; write a short privacy policy and terms; have a lawyer check them against the Israeli Privacy Protection Law (Amendment 13) and, if users abroad join, GDPR/COPPA. |
-| D5 | Two-step login for teachers. Firebase's own 2-step login needs Identity Platform and SMS costs. | Teachers sign in with Google (usually already 2-step); e-mail/password stays allowed for students. |
-| D6 | Abuse of the recording feature (offensive audio sent to a teacher). | D1 + D2 are enough for an MVP with known teachers. |
-| D7 | The budget alert only e-mails. | Keep as is for the MVP; consider an automatic shut-off later. |
+| D1 | The teacher confirms every new student. | Rules: nothing can be assigned, read or heard for a student whose `linkStatus` is not `approved` (tested). Functions: approve / reject. |
+| D2 | Teachers can remove a student and generate a new invite code. | Rules: removal cuts access at once, including old assignments, logs and recordings (tested). Functions: remove / regenerate. |
+| D3 | The date of birth stays self-declared; the teacher's confirmation is the check. | The pending-student screen shows name and age (marked self-declared) so the teacher can verify. |
+| D4 | Deletion on request, safest legal choice, no lawyer for now. | `CLAUDE.md` "Deleting data and privacy"; Functions in phase 1 step 8. |
+| D5 | Teachers sign in with Google only. | Rules: a teacher profile can be created only with `google.com` sign-in and a verified e-mail (tested). |
+| D6 | Abuse of recordings. | Covered by D1 + D2. |
+| D7 | Budget alert only e-mails. | Re-check in phase 7. |
+
+Open questions (asked in chat, answers go here):
+
+- Q1 Contact e-mail for privacy and deletion requests (privacy page and every parent e-mail).
+- Q2 Retention: should recordings be deleted automatically after some time (suggestion: 12 months)?
+- Q3 Copyright: teachers upload sheet music and backing tracks. Suggestion: a required statement when a teacher is approved and at upload: "I have the right to use these materials", plus terms that make the teacher responsible and let the owner remove files.
+
+Legal notes written with the safest reading (not legal advice):
+- Under 18 always needs a parent's e-mail approval before any recording is stored. The consent record keeps the parent's name, the time and the version of the consent text.
+- Data is stored in Israel (`me-west1`). Auth identities are handled by Google.
+- Collect only what the product needs. No analytics, ads or trackers.
 
 ## 5. Accepted residual risks
 

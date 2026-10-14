@@ -50,7 +50,7 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 
 ## Roles and authentication
 
-- Sign up / sign in with email+password and with Google.
+- Students sign up / sign in with email+password or Google. **Teachers sign in with Google only** (their Google account is usually already protected by 2-step verification) and must have a verified e-mail; enforced in the security rules.
 - At sign-up the user picks a role: **מורה** or **תלמיד/ה**. The role is written once and **can never be changed by the client** (enforced in security rules).
 - **Teachers need the owner's approval.** A new teacher starts as `teacherStatus: pending` and sees only: "החשבון שלך ממתין לאישור. נעדכן אותך כשהוא יאושר." Until approved, a teacher has no invite code and cannot do anything as a teacher (enforced in rules and Functions, not only in the UI).
 - **Owner admin:** the owner's account gets an `admin` custom claim, set once with a script run locally (never from the client). Only an admin can open `/admin`: a simple, mobile-friendly list of pending teachers (name, email, sign-up date) with "לאשר" / "לדחות" buttons, plus the list of approved teachers. Approving calls a Cloud Function that checks the admin claim, sets `teacherStatus: approved`, and creates the teacher's invite code. Rejecting sets `teacherStatus: rejected`. No notifications — the owner checks `/admin` herself.
@@ -62,15 +62,19 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 ### Parental consent (minors)
 1. The minor signs up and enters the teacher's invite code like any student.
 2. On the teacher's side, next to that student: "ממתין לאישור הורה", an email field for the parent, and a "שליחה" button. **The teacher enters the parent's email.**
-3. A Cloud Function sends the parent a Hebrew email with a personal one-time link (valid 7 days). On the link's page the parent enters their name and checks: "אני ההורה/האפוטרופוס ומאשר/ת ש[שם הילד] ישתמש/תשתמש באפליקציה ושהקלטות התרגול יישמרו וישותפו רק עם המורה [שם המורה]". The parent does not need an account.
+3. The teacher can send it only for a student they have already confirmed. A Cloud Function sends the parent a Hebrew email with a personal one-time link (valid 7 days). On the link's page the parent enters their name and checks: "אני ההורה/האפוטרופוס ומאשר/ת ש[שם הילד] ישתמש/תשתמש באפליקציה ושהקלטות התרגול יישמרו וישותפו רק עם המורה [שם המורה]". The parent does not need an account.
 4. The teacher can resend or fix the email. When the parent approves, the teacher sees "אושר".
 5. The token is random, stored only as a hash, single-use, and verified only inside a Cloud Function.
 
 ## Teacher–student linking
 
+**The teacher confirms every new student.** Typing a valid code only creates a *pending* link (`linkStatus: pending`). The teacher sees the pending student (name, age, instrument; the age is self-declared) and taps "אישור" or "דחייה". Until approved the student sees "ממתינים לאישור המורה" and can do nothing else; the teacher can't assign anything or see anything but the profile. Both steps are Cloud Functions.
+
 - Each teacher has a fixed personal **6-character invite code**, shown on their home screen with copy and share buttons.
 - The student enters the code; a Cloud Function validates it and links the student to that teacher. Clients can never list or read invite codes directly.
 - One teacher — many students; one student — exactly one teacher.
+- **A teacher can remove a student** at any time (Cloud Function, with confirmation). Removal clears `teacherId` and `linkStatus`, which instantly cuts the teacher's access to everything of that student (enforced in the rules). The student's own data stays theirs and is not deleted.
+- **A teacher can generate a new invite code** if the old one leaked (Cloud Function; the old code stops working at once). Otherwise the code stays fixed.
 - A student who isn't linked sees a screen asking for the code.
 
 ## Assignments
@@ -89,7 +93,7 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 
 | Path | Fields |
 |------|--------|
-| `users/{uid}` | role (teacher/student, immutable), name, createdAt. Students: birthDate, isMinor, instrument, level, teacherId, consentBy (self/parent), consentAt. Teachers: teacherStatus (pending/approved/rejected — writable only by Functions), inviteCode |
+| `users/{uid}` | role (teacher/student, immutable), name, createdAt. Students: birthDate, isMinor, instrument, level, teacherId, teacherName, linkStatus (pending/approved) — teacherId, teacherName and linkStatus are writable only by Functions —, consentBy (self/parent), consentAt. Teachers: teacherStatus (pending/approved/rejected — writable only by Functions), inviteCode |
 | `inviteCodes/{code}` | teacherId — **no client access**, Functions only |
 | `parentConsents/{id}` | studentId, teacherId, parentEmail, tokenHash, sentAt, expiresAt, parentName, approvedAt — teacher can read status of own students only; writes via Functions only |
 | `assignments/{id}` | teacherId, studentId, title, description, dailyGoalMinutes, weekStart, createdAt |
@@ -99,7 +103,7 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 | `templates/{id}` | teacherId, title, description, dailyGoalMinutes, createdAt |
 | `templates/{id}/items/{itemId}` | position, title, sheetPath, accompanimentPath, youtubeUrl, metronomeBpm |
 
-`teacherId` and `studentId` are duplicated onto documents on purpose so security rules can check access without extra reads.
+`teacherId` and `studentId` are duplicated onto documents on purpose so security rules can check access without extra reads. A teacher's access to a student's documents is also checked against the student's current link, so **teacher queries on assignments and practice logs must always filter by one `studentId`** (one query per student).
 
 ## Security rules (Firestore + Storage) — critical, the users are mostly minors
 
@@ -113,6 +117,16 @@ AI-generated exercises, music recognition from images or audio, notation renderi
   - `recordings/{studentId}/{assignmentId}/{itemId}` — the student writes (if consented); the student and their teacher read. Audio only, max 5 MB.
 - No public files, ever.
 - **Every rule must have tests** run against the emulator (`@firebase/rules-unit-testing`), including negative tests: another teacher, another student, an unlinked student, a minor without consent, a pending or rejected teacher, a non-admin trying to approve.
+
+## Deleting data and privacy
+
+The safest legal reading applies: collect little, keep it private, let people delete it. When in doubt, ask the owner.
+
+- **Delete my account:** every student and teacher gets "מחיקת החשבון שלי" in settings (recent re-login + typed confirmation). A Cloud Function permanently deletes: the profile, assignments/items/comments, practice logs, parent-consent records, all recordings and the sign-in account. Deleting a teacher also deletes the assignments, templates and sheet-music files they created and the recordings attached to those assignments, and unlinks their students (who are told). No undo.
+- **Parents of minors** can withdraw consent and request deletion of the child's data: from the link in the consent e-mail (self-service) and by writing to the privacy contact address (shown on the privacy page and in every parent e-mail).
+- **The owner can delete any user** from `/admin` (admin-only Function) to answer requests that arrive by e-mail.
+- Deletion runs only in Cloud Functions; the rules keep denying client deletes. Function logs never contain names, e-mails or tokens.
+- A short privacy notice in plain Hebrew (what is stored, who sees it, where it is stored — Israel —, how to delete, contact) is shown at sign-up and linked from every parent e-mail. It is a draft written by Claude, not legal advice.
 
 ## Definition of done for every phase
 - Works in the emulator on a phone-sized screen, in RTL.

@@ -28,9 +28,10 @@ Read CLAUDE.md. Build only the foundation, not the full screens:
 3. Authentication: sign up, sign in (email+password and Google), sign out, role selection (teacher/student, immutable).
 4. Student onboarding: name, date of birth, instrument, level, and the consent step for adults.
 5. Teacher approval: pending-teacher screen, the admin claim script (walk me through running it on my own account), the `/admin` page with approve/reject, and the Cloud Function that approves and creates the teacher's invite code.
-6. Linking a student to a teacher by invite code (Cloud Function).
+6. Linking a student to a teacher by invite code (Cloud Function) with **teacher confirmation**: the code creates a pending link; the teacher approves or rejects from the teacher home screen. Also: the teacher can remove a student and can generate a new invite code (Cloud Functions). Wrong-code attempts are rate-limited.
 7. Parental consent flow for minors: on the teacher's home screen, a simple list of minor students awaiting approval with an email field and send button; the Cloud Function that sends the email (use the emulator / log the email locally for now — no real email provider yet); the public consent page; status update.
-8. Navigation skeleton with two empty home screens: `/student` (student name and teacher name) and `/teacher` (teacher name, invite code with copy and share). Route by role after sign-in.
+8. Deletion and privacy (see "Deleting data and privacy" in CLAUDE.md): "delete my account" for students and teachers, owner deletion from `/admin`, and the plain-Hebrew privacy notice. All of it tested in the emulator.
+9. Navigation skeleton with two empty home screens: `/student` (student name and teacher name) and `/teacher` (teacher name, invite code with copy and share). Route by role after sign-in.
 
 Don't build assignments, timer, recordings or the dashboard yet. Stop, tell me what you built, and give me a checklist of what to try in the browser (including trying to break things: a second teacher, a pending teacher, a student without a code, a minor).
 
