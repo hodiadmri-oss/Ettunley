@@ -1,0 +1,9 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Placeholder: everything is closed until the full rules are written.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
