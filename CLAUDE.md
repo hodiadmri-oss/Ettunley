@@ -124,8 +124,10 @@ The safest legal reading applies: collect little, keep it private, let people de
 
 - **Delete my account:** every student and teacher gets "מחיקת החשבון שלי" in settings (recent re-login + typed confirmation). A Cloud Function permanently deletes: the profile, assignments/items/comments, practice logs, parent-consent records, all recordings and the sign-in account. Deleting a teacher also deletes the assignments, templates and sheet-music files they created and the recordings attached to those assignments, and unlinks their students (who are told). No undo.
 - **Parents of minors** can withdraw consent and request deletion of the child's data: from the link in the consent e-mail (self-service) and by writing to the privacy contact address (shown on the privacy page and in every parent e-mail).
+- **Retention:** every recording is deleted automatically 12 months after it was uploaded (scheduled Cloud Function). Users are told at sign-up (adults and parents, on the consent screen) and in the privacy notice. Anyone can delete earlier.
 - **The owner can delete any user** from `/admin` (admin-only Function) to answer requests that arrive by e-mail.
 - Deletion runs only in Cloud Functions; the rules keep denying client deletes. Function logs never contain names, e-mails or tokens.
+- The privacy contact address is a single setting in the code (`PRIVACY_CONTACT_EMAIL`) so it can change without touching the texts.
 - A short privacy notice in plain Hebrew (what is stored, who sees it, where it is stored — Israel —, how to delete, contact) is shown at sign-up and linked from every parent e-mail. It is a draft written by Claude, not legal advice.
 
 ## Definition of done for every phase

@@ -101,7 +101,7 @@ Decided:
 Open questions (asked in chat, answers go here):
 
 - Q1 Contact e-mail for privacy and deletion requests (privacy page and every parent e-mail).
-- Q2 Retention: should recordings be deleted automatically after some time (suggestion: 12 months)?
+- Q2 Retention: **decided** — recordings are deleted 12 months after upload; users are told at sign-up.
 - Q3 Copyright: teachers upload sheet music and backing tracks. Suggestion: a required statement when a teacher is approved and at upload: "I have the right to use these materials", plus terms that make the teacher responsible and let the owner remove files.
 
 Legal notes written with the safest reading (not legal advice):
