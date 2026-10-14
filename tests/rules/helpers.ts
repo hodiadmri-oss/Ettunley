@@ -25,7 +25,9 @@ export async function createEnv(): Promise<RulesTestEnvironment> {
   return initializeTestEnvironment({
     projectId: PROJECT_ID,
     firestore: { rules: readFileSync('firestore.rules', 'utf8') },
-    storage: { rules: readFileSync('storage.rules', 'utf8') },
+    // Storage rules are deliberately not passed here: the emulator loads
+    // storage.rules itself (from firebase.json), which is the only way its
+    // rules can read user profiles from Firestore.
   })
 }
 
