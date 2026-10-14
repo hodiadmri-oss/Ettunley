@@ -22,6 +22,8 @@ beforeEach(async () => {
     await storage.ref('sheet-music/teacherA/etude.pdf').put(bytes(1000), { contentType: 'application/pdf' })
     await storage.ref('recordings/adultA/a1/i1').put(bytes(1000), { contentType: 'audio/webm' })
     await storage.ref('recordings/minorA/a2/i1').put(bytes(1000), { contentType: 'audio/webm' })
+    await storage.ref('recordings/removedStudent/aR/i1').put(bytes(1000), { contentType: 'audio/webm' })
+    await storage.ref('recordings/pendingStudent/aP/i1').put(bytes(1000), { contentType: 'audio/webm' })
   })
 })
 
@@ -88,6 +90,14 @@ describe('sheet music: sheet-music/{teacherId}/{fileId}', () => {
 
   it("students of another teacher cannot read the file", async () => {
     await assertFails(as(ids.studentB).ref('sheet-music/teacherA/etude.pdf').getDownloadURL())
+  })
+
+  it('a student the teacher has not confirmed yet cannot read the teacher files', async () => {
+    await assertFails(as(ids.pendingStudent).ref('sheet-music/teacherA/etude.pdf').getDownloadURL())
+  })
+
+  it('a removed student cannot read the teacher files any more', async () => {
+    await assertFails(as(ids.removedStudent).ref('sheet-music/teacherA/etude.pdf').getDownloadURL())
   })
 
   it('an unlinked student cannot read the file', async () => {
@@ -196,6 +206,11 @@ describe('recordings: recordings/{studentId}/{assignmentId}/{itemId}', () => {
   it("another student cannot read the recording", async () => {
     await assertFails(as(ids.studentB).ref('recordings/adultA/a1/i1').getDownloadURL())
     await assertFails(as(ids.minorA).ref('recordings/adultA/a1/i1').getDownloadURL())
+  })
+
+  it('the teacher cannot hear recordings of a pending or removed student', async () => {
+    await assertFails(as(ids.teacherA).ref('recordings/pendingStudent/aP/i1').getDownloadURL())
+    await assertFails(as(ids.teacherA).ref('recordings/removedStudent/aR/i1').getDownloadURL())
   })
 
   it('a pending or rejected teacher cannot read recordings', async () => {

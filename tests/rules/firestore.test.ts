@@ -45,17 +45,47 @@ describe('users - sign-up', () => {
     )
   })
 
+  const googleTeacher = (uid: string) =>
+    as(uid, { email_verified: true, firebase: { sign_in_provider: 'google.com' } })
+
   it('a new teacher always starts as pending', async () => {
     await assertSucceeds(
-      setDoc(doc(as('newT'), 'users/newT'), {
+      setDoc(doc(googleTeacher('newT'), 'users/newT'), {
         role: 'teacher', name: 'מורה', createdAt: serverTimestamp(), teacherStatus: 'pending',
       }),
     )
   })
 
+  it('a teacher cannot sign up with e-mail and password (Google only)', async () => {
+    await assertFails(
+      setDoc(
+        doc(as('newT', { email_verified: true, firebase: { sign_in_provider: 'password' } }), 'users/newT'),
+        { role: 'teacher', name: 'מורה', createdAt: serverTimestamp(), teacherStatus: 'pending' },
+      ),
+    )
+  })
+
+  it('a teacher needs a verified e-mail to sign up', async () => {
+    await assertFails(
+      setDoc(
+        doc(as('newT', { email_verified: false, firebase: { sign_in_provider: 'google.com' } }), 'users/newT'),
+        { role: 'teacher', name: 'מורה', createdAt: serverTimestamp(), teacherStatus: 'pending' },
+      ),
+    )
+  })
+
+  it('students may still sign up with e-mail and password', async () => {
+    await assertSucceeds(
+      setDoc(
+        doc(as('newS', { firebase: { sign_in_provider: 'password' } }), 'users/newS'),
+        { role: 'student', name: 'תלמיד', createdAt: serverTimestamp() },
+      ),
+    )
+  })
+
   it('a new teacher cannot create themselves as approved', async () => {
     await assertFails(
-      setDoc(doc(as('newT'), 'users/newT'), {
+      setDoc(doc(googleTeacher('newT'), 'users/newT'), {
         role: 'teacher', name: 'מורה', createdAt: serverTimestamp(), teacherStatus: 'approved',
       }),
     )
@@ -63,7 +93,7 @@ describe('users - sign-up', () => {
 
   it('a new teacher cannot give themselves an invite code', async () => {
     await assertFails(
-      setDoc(doc(as('newT'), 'users/newT'), {
+      setDoc(doc(googleTeacher('newT'), 'users/newT'), {
         role: 'teacher', name: 'מורה', createdAt: serverTimestamp(),
         teacherStatus: 'pending', inviteCode: 'ZZZZZZ',
       }),
@@ -74,6 +104,11 @@ describe('users - sign-up', () => {
     await assertFails(
       setDoc(doc(as('newbie'), 'users/newbie'), {
         role: 'student', name: 'חדש', createdAt: serverTimestamp(), teacherId: 'teacherA',
+      }),
+    )
+    await assertFails(
+      setDoc(doc(as('newbie'), 'users/newbie'), {
+        role: 'student', name: 'חדש', createdAt: serverTimestamp(), teacherId: 'teacherA', linkStatus: 'approved',
       }),
     )
   })
@@ -494,7 +529,17 @@ describe('assignments', () => {
 
   it('the teacher reads and lists their own assignments', async () => {
     await assertSucceeds(getDoc(doc(as(ids.teacherA), 'assignments/a1')))
+    // The teacher always asks about one student at a time.
     await assertSucceeds(
+      getDocs(
+        query(
+          collection(as(ids.teacherA), 'assignments'),
+          where('teacherId', '==', 'teacherA'),
+          where('studentId', '==', 'adultA'),
+        ),
+      ),
+    )
+    await assertFails(
       getDocs(query(collection(as(ids.teacherA), 'assignments'), where('teacherId', '==', 'teacherA'))),
     )
   })
@@ -827,10 +872,25 @@ describe('practiceLogs', () => {
 
   it('a teacher lists only their own logs', async () => {
     await assertSucceeds(
-      getDocs(query(collection(as(ids.teacherA), 'practiceLogs'), where('teacherId', '==', 'teacherA'))),
+      getDocs(
+        query(
+          collection(as(ids.teacherA), 'practiceLogs'),
+          where('teacherId', '==', 'teacherA'),
+          where('studentId', '==', 'adultA'),
+        ),
+      ),
     )
     await assertFails(
-      getDocs(query(collection(as(ids.teacherA), 'practiceLogs'), where('teacherId', '==', 'teacherB'))),
+      getDocs(
+        query(
+          collection(as(ids.teacherA), 'practiceLogs'),
+          where('teacherId', '==', 'teacherB'),
+          where('studentId', '==', 'adultA'),
+        ),
+      ),
+    )
+    await assertFails(
+      getDocs(query(collection(as(ids.teacherA), 'practiceLogs'), where('teacherId', '==', 'teacherA'))),
     )
   })
 
@@ -994,5 +1054,72 @@ describe('security hardening', () => {
     it('cannot start after it ended', async () => {
       await assertFails(write(log({ startedAt: minutesAgo(1), endedAt: minutesAgo(11) })))
     })
+  })
+})
+
+describe('teacher confirmation of new students, and removal', () => {
+  const newAssignment = (studentId: string) => ({
+    teacherId: 'teacherA', studentId, title: 'פרק', dailyGoalMinutes: 10,
+    weekStart: ts('2026-10-11'), createdAt: serverTimestamp(),
+  })
+
+  it('the teacher sees a pending student profile (to decide), nothing more', async () => {
+    await assertSucceeds(getDoc(doc(as(ids.teacherA), 'users/pendingStudent')))
+    await assertSucceeds(
+      getDocs(query(collection(as(ids.teacherA), 'users'), where('teacherId', '==', 'teacherA'))),
+    )
+  })
+
+  it('a pending student cannot approve themselves', async () => {
+    await assertFails(updateDoc(doc(as(ids.pendingStudent), 'users/pendingStudent'), { linkStatus: 'approved' }))
+  })
+
+  it('a student cannot set or change linkStatus in any way', async () => {
+    await assertFails(updateDoc(doc(as(ids.unlinked), 'users/unlinked'), { linkStatus: 'approved' }))
+    await assertFails(updateDoc(doc(as(ids.adultA), 'users/adultA'), { linkStatus: 'pending' }))
+  })
+
+  it('the teacher cannot approve from the client (only a Cloud Function can)', async () => {
+    await assertFails(updateDoc(doc(as(ids.teacherA), 'users/pendingStudent'), { linkStatus: 'approved' }))
+    await assertFails(updateDoc(doc(as(ids.teacherA), 'users/removedStudent'), { teacherId: 'teacherA', linkStatus: 'approved' }))
+  })
+
+  it('no assignment can be created for a pending student', async () => {
+    await assertFails(setDoc(doc(as(ids.teacherA), 'assignments/new'), newAssignment('pendingStudent')))
+  })
+
+  it('no assignment can be created for a removed student', async () => {
+    await assertFails(setDoc(doc(as(ids.teacherA), 'assignments/new'), newAssignment('removedStudent')))
+  })
+
+  it('after removal the teacher loses access to everything of that student', async () => {
+    const db = as(ids.teacherA)
+    await assertFails(getDoc(doc(db, 'assignments/aR')))
+    await assertFails(getDocs(query(collection(db, 'assignments'), where('teacherId', '==', 'teacherA'), where('studentId', '==', 'removedStudent'))))
+    await assertFails(updateDoc(doc(db, 'assignments/aR'), { title: 'x' }))
+    await assertFails(getDoc(doc(db, 'assignments/aR/items/i1')))
+    await assertFails(setDoc(doc(db, 'assignments/aR/items/i2'), { position: 2, title: 'x', status: 'working' }))
+    await assertFails(getDoc(doc(db, 'assignments/aR/items/i1/comments/c1')))
+    await assertFails(
+      setDoc(doc(db, 'assignments/aR/items/i1/comments/c2'), {
+        authorId: 'teacherA', text: 'hi', createdAt: serverTimestamp(), readAt: null,
+      }),
+    )
+    await assertFails(getDoc(doc(db, 'practiceLogs/lR')))
+    await assertFails(getDoc(doc(db, 'users/removedStudent')))
+  })
+
+  it('the removed student still reads their own old assignment', async () => {
+    await assertSucceeds(getDoc(doc(as(ids.removedStudent), 'assignments/aR')))
+  })
+
+  it('the teacher cannot read parent-consent records of a student that is not actively linked', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'parentConsents/pcP'), {
+        studentId: 'pendingStudent', teacherId: 'teacherA', parentEmail: 'p@example.com',
+        tokenHash: 'h', sentAt: Timestamp.now(), expiresAt: Timestamp.now(),
+      })
+    })
+    await assertFails(getDoc(doc(as(ids.teacherA), 'parentConsents/pcP')))
   })
 })

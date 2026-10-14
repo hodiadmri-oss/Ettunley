@@ -67,12 +67,31 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/templates/$(tid)).data;
     }
 
+    // The student is linked to this teacher AND the teacher confirmed them.
+    // (linkStatus and teacherId are written only by Cloud Functions.) Removing
+    // a student clears both, which instantly cuts the teacher's access to
+    // everything that belongs to that student.
+    function isActiveLinkTo(studentId) {
+      return isPlainId(studentId)
+        && exists(userPath(studentId))
+        && userDoc(studentId).teacherId == request.auth.uid
+        && userDoc(studentId).linkStatus == 'approved';
+    }
+
     function isStudentOf(a) {
       return signedIn() && a.studentId == request.auth.uid;
     }
 
+    // For documents that belong to a student (assignments, items, logs...).
     function isTeacherOf(a) {
-      return isApprovedTeacher() && a.teacherId == request.auth.uid;
+      return isApprovedTeacher()
+        && a.teacherId == request.auth.uid
+        && isActiveLinkTo(a.studentId);
+    }
+
+    // For the teacher's own documents that do not belong to a student.
+    function isOwnerTeacher(t) {
+      return isApprovedTeacher() && t.teacherId == request.auth.uid;
     }
 
     function validShortText(value, maxLength) {
@@ -133,9 +152,13 @@ service cloud.firestore {
         && validShortText(request.resource.data.name, 60)
         && request.resource.data.createdAt == request.time
         && (
+          // Teachers sign in with Google only (usually already 2-step) and with
+          // a verified e-mail, so the owner can trust the address she approves.
           (request.resource.data.keys().hasOnly(['role', 'name', 'createdAt', 'teacherStatus'])
             && request.resource.data.role == 'teacher'
-            && request.resource.data.teacherStatus == 'pending')
+            && request.resource.data.teacherStatus == 'pending'
+            && request.auth.token.firebase.sign_in_provider == 'google.com'
+            && request.auth.token.email_verified == true)
           ||
           (request.resource.data.keys().hasOnly(['role', 'name', 'createdAt'])
             && request.resource.data.role == 'student')
@@ -169,7 +192,9 @@ service cloud.firestore {
     // A teacher sees the consent status of their own students only.
     // Writes happen only in Cloud Functions.
     match /parentConsents/{id} {
-      allow read: if isApprovedTeacher() && resource.data.teacherId == request.auth.uid;
+      allow read: if isApprovedTeacher()
+        && resource.data.teacherId == request.auth.uid
+        && isActiveLinkTo(resource.data.studentId);
       allow write: if false;
     }
 
@@ -195,9 +220,7 @@ service cloud.firestore {
         && request.resource.data.teacherId == request.auth.uid
         && request.resource.data.createdAt == request.time
         && isPlainId(request.resource.data.studentId)
-        && exists(userPath(request.resource.data.studentId))
-        && userDoc(request.resource.data.studentId).role == 'student'
-        && userDoc(request.resource.data.studentId).teacherId == request.auth.uid
+        && isActiveLinkTo(request.resource.data.studentId)
         && validAssignmentContent(request.resource.data);
 
       allow update: if isTeacherOf(resource.data)
@@ -346,7 +369,7 @@ service cloud.firestore {
     }
 
     match /templates/{tid} {
-      allow read: if isTeacherOf(resource.data);
+      allow read: if isOwnerTeacher(resource.data);
 
       allow create: if isApprovedTeacher()
         && request.resource.data.keys().hasOnly(['teacherId', 'title', 'description', 'dailyGoalMinutes', 'createdAt'])
@@ -354,12 +377,12 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && validTemplateContent(request.resource.data);
 
-      allow update: if isTeacherOf(resource.data)
+      allow update: if isOwnerTeacher(resource.data)
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['title', 'description', 'dailyGoalMinutes'])
         && validTemplateContent(request.resource.data);
 
-      allow delete: if isTeacherOf(resource.data);
+      allow delete: if isOwnerTeacher(resource.data);
 
       match /items/{itemId} {
         function validTemplateItem(d) {
@@ -373,9 +396,9 @@ service cloud.firestore {
             && (!('metronomeBpm' in d) || (d.metronomeBpm is int && d.metronomeBpm >= 20 && d.metronomeBpm <= 300));
         }
 
-        allow read: if isTeacherOf(templateDoc(tid));
-        allow create, update: if isTeacherOf(templateDoc(tid)) && validTemplateItem(request.resource.data);
-        allow delete: if isTeacherOf(templateDoc(tid));
+        allow read: if isOwnerTeacher(templateDoc(tid));
+        allow create, update: if isOwnerTeacher(templateDoc(tid)) && validTemplateItem(request.resource.data);
+        allow delete: if isOwnerTeacher(templateDoc(tid));
       }
     }
   }

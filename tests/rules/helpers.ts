@@ -19,6 +19,8 @@ export const ids = {
   minorNoConsent: 'minorNoConsent', // minor student of teacherA, waiting for parent
   studentB: 'studentB', // student of teacherB
   unlinked: 'unlinked', // adult student without a teacher
+  pendingStudent: 'pendingStudent', // typed teacherA's code, not yet confirmed
+  removedStudent: 'removedStudent', // was removed by teacherA; old assignment remains
 }
 
 export async function createEnv(): Promise<RulesTestEnvironment> {
@@ -65,19 +67,26 @@ export async function seed(env: RulesTestEnvironment) {
     await put('users/teacherRejected', teacher('נדחה', 'rejected'))
 
     await put('users/adultA', student('בוגר א', {
-      birthDate: adultBirth, isMinor: false, teacherId: 'teacherA', teacherName: 'מורה א',
+      birthDate: adultBirth, isMinor: false, teacherId: 'teacherA', teacherName: 'מורה א', linkStatus: 'approved',
       consentBy: 'self', consentAt: now(),
     }))
     await put('users/minorA', student('קטין א', {
-      birthDate: minorBirth, isMinor: true, teacherId: 'teacherA', teacherName: 'מורה א',
+      birthDate: minorBirth, isMinor: true, teacherId: 'teacherA', teacherName: 'מורה א', linkStatus: 'approved',
       consentBy: 'parent', consentAt: now(),
     }))
     await put('users/minorNoConsent', student('קטין בלי אישור', {
-      birthDate: minorBirth, isMinor: true, teacherId: 'teacherA', teacherName: 'מורה א',
+      birthDate: minorBirth, isMinor: true, teacherId: 'teacherA', teacherName: 'מורה א', linkStatus: 'approved',
     }))
     await put('users/studentB', student('תלמיד ב', {
-      birthDate: adultBirth, isMinor: false, teacherId: 'teacherB', teacherName: 'מורה ב',
+      birthDate: adultBirth, isMinor: false, teacherId: 'teacherB', teacherName: 'מורה ב', linkStatus: 'approved',
       consentBy: 'self', consentAt: now(),
+    }))
+    await put('users/pendingStudent', student('ממתין לאישור', {
+      birthDate: adultBirth, isMinor: false, teacherId: 'teacherA', teacherName: 'מורה א',
+      linkStatus: 'pending', consentBy: 'self', consentAt: now(),
+    }))
+    await put('users/removedStudent', student('הוסר', {
+      birthDate: adultBirth, isMinor: false, consentBy: 'self', consentAt: now(),
     }))
     await put('users/unlinked', student('ללא מורה', {
       birthDate: adultBirth, isMinor: false, consentBy: 'self', consentAt: now(),
@@ -95,6 +104,7 @@ export async function seed(env: RulesTestEnvironment) {
       ['a2', 'teacherA', 'minorA'],
       ['a3', 'teacherA', 'minorNoConsent'],
       ['aB', 'teacherB', 'studentB'],
+      ['aR', 'teacherA', 'removedStudent'], // left over from before the removal
     ]) {
       await put(`assignments/${aid}`, {
         teacherId, studentId, title: 'סולם', description: '', dailyGoalMinutes: 15,
@@ -106,6 +116,13 @@ export async function seed(env: RulesTestEnvironment) {
       authorId: 'teacherA', text: 'כל הכבוד', createdAt: now(), readAt: null,
     })
 
+    await put('assignments/aR/items/i1/comments/c1', {
+      authorId: 'teacherA', text: 'ישן', createdAt: now(), readAt: null,
+    })
+    await put('practiceLogs/lR', {
+      studentId: 'removedStudent', teacherId: 'teacherA', assignmentId: 'aR',
+      minutes: 10, startedAt: now(), endedAt: now(),
+    })
     await put('practiceLogs/l1', {
       studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1',
       minutes: 10, startedAt: now(), endedAt: now(),

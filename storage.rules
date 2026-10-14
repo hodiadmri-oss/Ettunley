@@ -61,7 +61,8 @@ service firebase.storage {
         && ((request.auth.uid == teacherId && isApprovedTeacher())
             || (firestore.exists(userPath(request.auth.uid))
                 && userDoc(request.auth.uid).role == 'student'
-                && userDoc(request.auth.uid).teacherId == teacherId));
+                && userDoc(request.auth.uid).teacherId == teacherId
+                && userDoc(request.auth.uid).linkStatus == 'approved'));
 
       allow create, update: if signedIn()
         && request.auth.uid == teacherId
@@ -83,7 +84,8 @@ service firebase.storage {
         && (request.auth.uid == studentId
             || (isApprovedTeacher()
                 && firestore.exists(userPath(studentId))
-                && userDoc(studentId).teacherId == request.auth.uid));
+                && userDoc(studentId).teacherId == request.auth.uid
+                && userDoc(studentId).linkStatus == 'approved'));
 
       allow create, update: if signedIn()
         && request.auth.uid == studentId
