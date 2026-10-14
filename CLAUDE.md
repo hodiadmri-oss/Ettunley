@@ -11,6 +11,7 @@ Hebrew music-practice web app connecting private music teachers with their stude
 - **Never add features that are not in this file or in the current phase prompt.** If you think something would help, ask first.
 - Commit to git after every working step, with a clear English commit message. Never commit secrets (`.env`, service-account keys, API keys for email).
 - If you are unsure about a product decision, ask. Do not guess.
+- Before building any phase, read `SECURITY.md`: it lists the security requirements for that phase and the open decisions for the owner.
 
 ## The product
 
