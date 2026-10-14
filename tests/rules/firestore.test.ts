@@ -158,7 +158,7 @@ describe('users - reading', () => {
 })
 
 describe('users - admin', () => {
-  const admin = () => as(ids.admin, { admin: true })
+  const admin = () => as(ids.admin, { admin: true, email_verified: true })
 
   it('the admin lists pending teachers', async () => {
     await assertSucceeds(
@@ -381,7 +381,7 @@ describe('inviteCodes and parentConsents', () => {
   it('nobody can read an invite code', async () => {
     await assertFails(getDoc(doc(as(ids.teacherA), 'inviteCodes/AAAAAA')))
     await assertFails(getDoc(doc(as(ids.adultA), 'inviteCodes/AAAAAA')))
-    await assertFails(getDoc(doc(as(ids.admin, { admin: true }), 'inviteCodes/AAAAAA')))
+    await assertFails(getDoc(doc(as(ids.admin, { admin: true, email_verified: true }), 'inviteCodes/AAAAAA')))
   })
 
   it('nobody can list invite codes', async () => {
@@ -534,7 +534,7 @@ describe('assignment items', () => {
         ...item,
         sheetPath: 'sheet-music/teacherA/etude.pdf',
         accompanimentPath: 'sheet-music/teacherA/backing.mp3',
-        youtubeUrl: 'https://youtu.be/abc',
+        youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
       }),
     )
   })
@@ -774,7 +774,8 @@ describe('comments (teacher replies)', () => {
 describe('practiceLogs', () => {
   const log = (over: Record<string, unknown> = {}) => ({
     studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1',
-    minutes: 12, startedAt: ts('2026-10-14T10:00:00Z'), endedAt: ts('2026-10-14T10:12:00Z'), ...over,
+    minutes: 12, startedAt: Timestamp.fromMillis(Date.now() - 13 * 60000),
+    endedAt: Timestamp.fromMillis(Date.now() - 60000), ...over,
   })
 
   it('a student logs their own practice', async () => {
@@ -898,5 +899,100 @@ describe('everything else is closed', () => {
     await assertFails(getDoc(doc(anonymous(), 'templates/t1')))
     await assertFails(getDoc(doc(anonymous(), 'practiceLogs/l1')))
     await assertFails(setDoc(doc(anonymous(), 'assignments/x'), { a: 1 }))
+  })
+})
+
+describe('security hardening', () => {
+  const asAnonymous = (uid: string) =>
+    env.authenticatedContext(uid, { firebase: { sign_in_provider: 'anonymous' } }).firestore()
+
+  it('anonymous sign-in is refused everywhere, even on own profile', async () => {
+    await assertFails(getDoc(doc(asAnonymous('adultA'), 'users/adultA')))
+    await assertFails(
+      setDoc(doc(asAnonymous('anon1'), 'users/anon1'), {
+        role: 'student', name: 'x', createdAt: serverTimestamp(),
+      }),
+    )
+  })
+
+  it('an admin claim without a verified e-mail is not an admin', async () => {
+    const unverified = as(ids.admin, { admin: true, email_verified: false })
+    await assertFails(
+      getDocs(query(collection(unverified, 'users'), where('role', '==', 'teacher'))),
+    )
+    const noFlag = as(ids.admin, { admin: true })
+    await assertFails(
+      getDocs(query(collection(noFlag, 'users'), where('role', '==', 'teacher'))),
+    )
+  })
+
+  it('YouTube links must be real YouTube links', async () => {
+    const base = { position: 2, title: 'אטיוד', status: 'working' }
+    const db = as(ids.teacherA)
+    for (const good of [
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      'https://youtu.be/dQw4w9WgXcQ',
+      'https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=30s',
+    ]) {
+      await assertSucceeds(setDoc(doc(db, 'assignments/a1/items/yt'), { ...base, youtubeUrl: good }))
+    }
+    for (const bad of [
+      'javascript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'http://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      'https://evil.example/watch?v=dQw4w9WgXcQ',
+      'https://www.youtube.com.evil.example/watch?v=dQw4w9WgXcQ',
+      'https://youtu.be/short',
+    ]) {
+      await assertFails(setDoc(doc(db, 'assignments/a1/items/yt'), { ...base, youtubeUrl: bad }))
+    }
+  })
+
+  it('ids used inside paths must be plain ids (no slashes)', async () => {
+    await assertFails(
+      setDoc(doc(as(ids.teacherA), 'assignments/new'), {
+        teacherId: 'teacherA', studentId: 'adultA/../x', title: 't', dailyGoalMinutes: 10,
+        weekStart: ts('2026-10-11'), createdAt: serverTimestamp(),
+      }),
+    )
+    await assertFails(
+      setDoc(doc(as(ids.adultA), 'practiceLogs/new'), {
+        studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1/items/i1', minutes: 5,
+        startedAt: Timestamp.now(), endedAt: Timestamp.now(),
+      }),
+    )
+  })
+
+  describe('practice log times must be believable', () => {
+    const minutesAgo = (m: number) => Timestamp.fromMillis(Date.now() - m * 60000)
+    const log = (over: Record<string, unknown>) => ({
+      studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1',
+      minutes: 10, startedAt: minutesAgo(11), endedAt: minutesAgo(1), ...over,
+    })
+    const write = (data: object) => setDoc(doc(as(ids.adultA), 'practiceLogs/new'), data)
+
+    it('a real session is accepted', async () => {
+      await assertSucceeds(write(log({})))
+    })
+
+    it('cannot claim more minutes than the session lasted', async () => {
+      await assertFails(write(log({ minutes: 60 })))
+    })
+
+    it('cannot end in the future', async () => {
+      await assertFails(
+        write(log({ startedAt: Timestamp.fromMillis(Date.now() + 3600000), endedAt: Timestamp.fromMillis(Date.now() + 4200000) })),
+      )
+    })
+
+    it('cannot backfill a session older than a week', async () => {
+      await assertFails(
+        write(log({ startedAt: minutesAgo(60 * 24 * 9), endedAt: minutesAgo(60 * 24 * 9 - 10) })),
+      )
+    })
+
+    it('cannot start after it ended', async () => {
+      await assertFails(write(log({ startedAt: minutesAgo(1), endedAt: minutesAgo(11) })))
+    })
   })
 })

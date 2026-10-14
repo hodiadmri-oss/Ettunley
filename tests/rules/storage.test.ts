@@ -45,6 +45,17 @@ describe('sheet music: sheet-music/{teacherId}/{fileId}', () => {
     await assertFails(upload(ids.teacherA, 'sheet-music/teacherA/huge.pdf', 21 * MB))
   })
 
+  it('rejects SVG and other script-capable formats even though they are "images"', async () => {
+    await assertFails(upload(ids.teacherA, 'sheet-music/teacherA/x.svg', 1000, 'image/svg+xml'))
+    await assertFails(upload(ids.teacherA, 'sheet-music/teacherA/x.html', 1000, 'text/html'))
+    await assertFails(upload(ids.teacherA, 'sheet-music/teacherA/x.js', 1000, 'application/javascript'))
+  })
+
+  it('nobody can list a teacher folder to discover file names', async () => {
+    await assertFails(as(ids.teacherA).ref('sheet-music/teacherA').listAll())
+    await assertFails(as(ids.adultA).ref('sheet-music/teacherA').listAll())
+  })
+
   it('rejects file types that are not image, PDF or mp3', async () => {
     await assertFails(upload(ids.teacherA, 'sheet-music/teacherA/app.exe', 1000, 'application/x-msdownload'))
     await assertFails(upload(ids.teacherA, 'sheet-music/teacherA/page.html', 1000, 'text/html'))
@@ -116,6 +127,21 @@ describe('recordings: recordings/{studentId}/{assignmentId}/{itemId}', () => {
 
   it('replacing an existing recording works (same path)', async () => {
     await assertSucceeds(upload(ids.adultA, 'recordings/adultA/a1/i1'))
+  })
+
+  it('accepts the codec suffix browsers add (audio/webm;codecs=opus)', async () => {
+    await assertSucceeds(upload(ids.adultA, 'recordings/adultA/a1/i2', 1000, 'audio/webm;codecs=opus'))
+  })
+
+  it('nobody can list recordings folders', async () => {
+    await assertFails(as(ids.adultA).ref('recordings/adultA').listAll())
+    await assertFails(as(ids.teacherA).ref('recordings/adultA/a1').listAll())
+  })
+
+  it('anonymous sign-in is refused', async () => {
+    const anon = env.authenticatedContext('adultA', { firebase: { sign_in_provider: 'anonymous' } }).storage()
+    await assertFails(anon.ref('recordings/adultA/a1/i2').put(bytes(10), { contentType: 'audio/webm' }))
+    await assertFails(anon.ref('recordings/adultA/a1/i1').getDownloadURL())
   })
 
   it('accepts typical browser formats (webm, mp4, ogg)', async () => {

@@ -6,8 +6,24 @@ service firebase.storage {
     // Helpers (read the user profile from Firestore)
     // ---------------------------------------------------------------
 
+    // Anonymous sign-in is never used; refuse it even if someone enables it.
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // Closed allow-lists. Vector formats such as SVG or HTML are excluded on
+    // purpose because they can carry scripts. (The declared type is set by the
+    // client, so the app must also only ever show these files through
+    // <img> / <audio> and never navigate to them.)
+    function isAllowedSheetMusicType() {
+      return request.resource.contentType.matches(
+        'image/(jpeg|png|webp|gif|heic|heif)|application/pdf|audio/mpeg');
+    }
+
+    function isAllowedRecordingType() {
+      return request.resource.contentType.matches(
+        'audio/(webm|ogg|mp4|mpeg|aac|x-m4a|wav|3gpp)(;.*)?');
     }
 
     function userPath(uid) {
@@ -40,7 +56,8 @@ service firebase.storage {
     // ---------------------------------------------------------------
 
     match /sheet-music/{teacherId}/{fileId} {
-      allow read: if signedIn()
+      // `get` only: nobody can list a folder to discover file names.
+      allow get: if signedIn()
         && ((request.auth.uid == teacherId && isApprovedTeacher())
             || (firestore.exists(userPath(request.auth.uid))
                 && userDoc(request.auth.uid).role == 'student'
@@ -50,7 +67,7 @@ service firebase.storage {
         && request.auth.uid == teacherId
         && isApprovedTeacher()
         && request.resource.size <= 20 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|application/pdf|audio/mpeg');
+        && isAllowedSheetMusicType();
 
       allow delete: if signedIn() && request.auth.uid == teacherId && isApprovedTeacher();
     }
@@ -62,7 +79,7 @@ service firebase.storage {
     // ---------------------------------------------------------------
 
     match /recordings/{studentId}/{assignmentId}/{itemId} {
-      allow read: if signedIn()
+      allow get: if signedIn()
         && (request.auth.uid == studentId
             || (isApprovedTeacher()
                 && firestore.exists(userPath(studentId))
@@ -72,7 +89,7 @@ service firebase.storage {
         && request.auth.uid == studentId
         && canRecord()
         && request.resource.size <= 5 * 1024 * 1024
-        && request.resource.contentType.matches('audio/.*')
+        && isAllowedRecordingType()
         // The recording must belong to a real assignment of this student.
         && firestore.get(/databases/(default)/documents/assignments/$(assignmentId)).data.studentId == studentId;
 

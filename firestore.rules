@@ -6,13 +6,31 @@ service cloud.firestore {
     // Helpers
     // ---------------------------------------------------------------
 
+    // Anonymous sign-in is never used; refuse it even if someone enables it.
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
     // The admin claim is set once by a local script, never by the client.
+    // The verified-email requirement blocks account "pre-hijacking" with the
+    // owner's e-mail address.
     function isAdmin() {
-      return signedIn() && request.auth.token.admin == true;
+      return signedIn()
+        && request.auth.token.admin == true
+        && request.auth.token.email_verified == true;
+    }
+
+    // Document ids that are interpolated into paths must be plain ids.
+    function isPlainId(value) {
+      return value is string && value.matches('[A-Za-z0-9_-]{1,128}');
+    }
+
+    // Only normal YouTube links; the app builds the final link from the video id.
+    function validYoutubeUrl(value) {
+      return value is string
+        && value.size() <= 200
+        && value.matches('https://(www\\.|m\\.)?(youtube\\.com/watch\\?v=|youtu\\.be/)[A-Za-z0-9_-]{11}([&?#].*)?');
     }
 
     function userPath(uid) {
@@ -176,7 +194,7 @@ service cloud.firestore {
              ['teacherId', 'studentId', 'title', 'description', 'dailyGoalMinutes', 'weekStart', 'createdAt'])
         && request.resource.data.teacherId == request.auth.uid
         && request.resource.data.createdAt == request.time
-        && request.resource.data.studentId is string
+        && isPlainId(request.resource.data.studentId)
         && exists(userPath(request.resource.data.studentId))
         && userDoc(request.resource.data.studentId).role == 'student'
         && userDoc(request.resource.data.studentId).teacherId == request.auth.uid
@@ -202,7 +220,7 @@ service cloud.firestore {
           && validShortText(d.title, 100)
           && (!('sheetPath' in d) || validTeacherFilePath(d.sheetPath))
           && (!('accompanimentPath' in d) || validTeacherFilePath(d.accompanimentPath))
-          && (!('youtubeUrl' in d) || (d.youtubeUrl is string && d.youtubeUrl.size() <= 200))
+          && (!('youtubeUrl' in d) || validYoutubeUrl(d.youtubeUrl))
           && (!('metronomeBpm' in d) || (d.metronomeBpm is int && d.metronomeBpm >= 20 && d.metronomeBpm <= 300))
           && d.status in ['working', 'ready'];
       }
@@ -297,13 +315,20 @@ service cloud.firestore {
         && userDoc(request.auth.uid).role == 'student'
         && 'teacherId' in userDoc(request.auth.uid)
         && request.resource.data.teacherId == userDoc(request.auth.uid).teacherId
-        && request.resource.data.assignmentId is string
+        && isPlainId(request.resource.data.assignmentId)
         && assignmentDoc(request.resource.data.assignmentId).studentId == request.auth.uid
         && request.resource.data.minutes is int
         && request.resource.data.minutes >= 1
         && request.resource.data.minutes <= 600
         && request.resource.data.startedAt is timestamp
-        && request.resource.data.endedAt is timestamp;
+        && request.resource.data.endedAt is timestamp
+        // The times must be believable: not in the future (5 min clock
+        // tolerance), not older than a week, and long enough for the minutes.
+        && request.resource.data.endedAt <= request.time + duration.value(5, 'm')
+        && request.resource.data.endedAt >= request.time - duration.value(7, 'd')
+        && request.resource.data.startedAt <= request.resource.data.endedAt
+        && request.resource.data.minutes * 60000
+             <= request.resource.data.endedAt.toMillis() - request.resource.data.startedAt.toMillis() + 60000;
 
       allow update, delete: if false;
     }
@@ -344,7 +369,7 @@ service cloud.firestore {
             && validShortText(d.title, 100)
             && (!('sheetPath' in d) || validTeacherFilePath(d.sheetPath))
             && (!('accompanimentPath' in d) || validTeacherFilePath(d.accompanimentPath))
-            && (!('youtubeUrl' in d) || (d.youtubeUrl is string && d.youtubeUrl.size() <= 200))
+            && (!('youtubeUrl' in d) || validYoutubeUrl(d.youtubeUrl))
             && (!('metronomeBpm' in d) || (d.metronomeBpm is int && d.metronomeBpm >= 20 && d.metronomeBpm <= 300));
         }
 
