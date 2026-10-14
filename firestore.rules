@@ -1,9 +1,357 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Placeholder: everything is closed until the full rules are written.
-    match /{document=**} {
+
+    // ---------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // The admin claim is set once by a local script, never by the client.
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function userDoc(uid) {
+      return get(userPath(uid)).data;
+    }
+
+    // A teacher can act as a teacher only once the owner approved them.
+    function isApprovedTeacher() {
+      return signedIn()
+        && exists(userPath(request.auth.uid))
+        && userDoc(request.auth.uid).role == 'teacher'
+        && userDoc(request.auth.uid).teacherStatus == 'approved';
+    }
+
+    // Students may record only after consent was given (self for adults,
+    // parent for minors - the latter is written by a Cloud Function only).
+    function canRecord() {
+      return signedIn()
+        && exists(userPath(request.auth.uid))
+        && userDoc(request.auth.uid).role == 'student'
+        && 'consentAt' in userDoc(request.auth.uid)
+        && userDoc(request.auth.uid).consentAt != null;
+    }
+
+    function assignmentDoc(aid) {
+      return get(/databases/$(database)/documents/assignments/$(aid)).data;
+    }
+
+    function templateDoc(tid) {
+      return get(/databases/$(database)/documents/templates/$(tid)).data;
+    }
+
+    function isStudentOf(a) {
+      return signedIn() && a.studentId == request.auth.uid;
+    }
+
+    function isTeacherOf(a) {
+      return isApprovedTeacher() && a.teacherId == request.auth.uid;
+    }
+
+    function validShortText(value, maxLength) {
+      return value is string && value.size() > 0 && value.size() <= maxLength;
+    }
+
+    // Teachers may reference only files inside their own folder.
+    function validTeacherFilePath(path) {
+      return path is string
+        && path.size() <= 300
+        && path.matches('sheet-music/' + request.auth.uid + '/[^/]+');
+    }
+
+    // 18 years in milliseconds (365.25 days per year).
+    function eighteenYearsMs() {
+      return 568036800000;
+    }
+
+    // ---------------------------------------------------------------
+    // users/{uid}
+    // ---------------------------------------------------------------
+
+    function validStudentProfileChange(before, after, affected) {
+      return affected.hasOnly(['name', 'birthDate', 'isMinor', 'instrument', 'level', 'consentBy', 'consentAt'])
+        && (!('name' in affected) || validShortText(after.name, 60))
+        && (!('instrument' in affected) || validShortText(after.instrument, 50))
+        && (!('level' in affected) || after.level in ['beginner', 'intermediate', 'advanced'])
+        // Date of birth and the minor flag are written together, exactly once.
+        && (!affected.hasAny(['birthDate', 'isMinor'])
+            || (affected.hasAll(['birthDate', 'isMinor'])
+                && !('birthDate' in before)
+                && !('isMinor' in before)
+                && after.birthDate is timestamp
+                && after.birthDate.toMillis() < request.time.toMillis()
+                && after.isMinor == (request.time.toMillis() - after.birthDate.toMillis() < eighteenYearsMs())))
+        // Only adults can give their own consent, once. For minors the
+        // consent is written by a Cloud Function after the parent approves.
+        && (!affected.hasAny(['consentBy', 'consentAt'])
+            || (affected.hasAll(['consentBy', 'consentAt'])
+                && !('consentAt' in before)
+                && 'isMinor' in after
+                && after.isMinor == false
+                && after.consentBy == 'self'
+                && after.consentAt == request.time));
+    }
+
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid)
+        // The admin sees teachers only (pending / approved lists), never students.
+        || (isAdmin() && resource.data.role == 'teacher')
+        // A teacher sees only students that are linked to them. Only student
+        // profiles ever carry a teacherId, so no role check is needed (and a
+        // role check would stop the "my students" query from being allowed).
+        || (isApprovedTeacher() && resource.data.teacherId == request.auth.uid);
+
+      // The role is written once, here. Teachers always start as pending.
+      allow create: if signedIn() && request.auth.uid == uid
+        && validShortText(request.resource.data.name, 60)
+        && request.resource.data.createdAt == request.time
+        && (
+          (request.resource.data.keys().hasOnly(['role', 'name', 'createdAt', 'teacherStatus'])
+            && request.resource.data.role == 'teacher'
+            && request.resource.data.teacherStatus == 'pending')
+          ||
+          (request.resource.data.keys().hasOnly(['role', 'name', 'createdAt'])
+            && request.resource.data.role == 'student')
+        );
+
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && (
+          (resource.data.role == 'teacher'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+            && validShortText(request.resource.data.name, 60))
+          ||
+          (resource.data.role == 'student'
+            && validStudentProfileChange(
+                 resource.data,
+                 request.resource.data,
+                 request.resource.data.diff(resource.data).affectedKeys()))
+        );
+
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // Functions-only collections
+    // ---------------------------------------------------------------
+
+    match /inviteCodes/{code} {
       allow read, write: if false;
+    }
+
+    // A teacher sees the consent status of their own students only.
+    // Writes happen only in Cloud Functions.
+    match /parentConsents/{id} {
+      allow read: if isApprovedTeacher() && resource.data.teacherId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // assignments/{aid}
+    // ---------------------------------------------------------------
+
+    function validAssignmentContent(d) {
+      return validShortText(d.title, 100)
+        && (!('description' in d) || (d.description is string && d.description.size() <= 1000))
+        && d.dailyGoalMinutes is int
+        && d.dailyGoalMinutes >= 1
+        && d.dailyGoalMinutes <= 240
+        && d.weekStart is timestamp;
+    }
+
+    match /assignments/{aid} {
+      allow read: if isStudentOf(resource.data) || isTeacherOf(resource.data);
+
+      allow create: if isApprovedTeacher()
+        && request.resource.data.keys().hasOnly(
+             ['teacherId', 'studentId', 'title', 'description', 'dailyGoalMinutes', 'weekStart', 'createdAt'])
+        && request.resource.data.teacherId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.studentId is string
+        && exists(userPath(request.resource.data.studentId))
+        && userDoc(request.resource.data.studentId).role == 'student'
+        && userDoc(request.resource.data.studentId).teacherId == request.auth.uid
+        && validAssignmentContent(request.resource.data);
+
+      allow update: if isTeacherOf(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['title', 'description', 'dailyGoalMinutes', 'weekStart'])
+        && validAssignmentContent(request.resource.data);
+
+      // Assignments never close; deleting is not allowed for now.
+      allow delete: if false;
+
+      // -------------------------------------------------------------
+      // assignments/{aid}/items/{itemId}
+      // -------------------------------------------------------------
+
+      function validItemContent(d) {
+        return d.keys().hasOnly(
+               ['position', 'title', 'sheetPath', 'accompanimentPath', 'youtubeUrl',
+                'metronomeBpm', 'status', 'statusUpdatedAt', 'recording'])
+          && d.position is int
+          && validShortText(d.title, 100)
+          && (!('sheetPath' in d) || validTeacherFilePath(d.sheetPath))
+          && (!('accompanimentPath' in d) || validTeacherFilePath(d.accompanimentPath))
+          && (!('youtubeUrl' in d) || (d.youtubeUrl is string && d.youtubeUrl.size() <= 200))
+          && (!('metronomeBpm' in d) || (d.metronomeBpm is int && d.metronomeBpm >= 20 && d.metronomeBpm <= 300))
+          && d.status in ['working', 'ready'];
+      }
+
+      function validRecording(r, aid, itemId) {
+        return r is map
+          && r.keys().hasOnly(['path', 'durationSeconds', 'uploadedAt'])
+          && r.path == 'recordings/' + request.auth.uid + '/' + aid + '/' + itemId
+          && r.durationSeconds is number
+          && r.durationSeconds > 0
+          && r.durationSeconds <= 180
+          && r.uploadedAt == request.time;
+      }
+
+      function validStudentItemChange(aid, itemId) {
+        let affected = request.resource.data.diff(resource.data).affectedKeys();
+        return affected.hasOnly(['status', 'statusUpdatedAt', 'recording'])
+          && (!('status' in affected)
+              || (request.resource.data.status in ['working', 'ready']
+                  && affected.hasAll(['status', 'statusUpdatedAt'])
+                  && request.resource.data.statusUpdatedAt == request.time))
+          && (!('statusUpdatedAt' in affected) || 'status' in affected)
+          && (!('recording' in affected)
+              || (canRecord()
+                  && validRecording(request.resource.data.recording, aid, itemId)));
+      }
+
+      match /items/{itemId} {
+        allow read: if isStudentOf(assignmentDoc(aid)) || isTeacherOf(assignmentDoc(aid));
+
+        allow create: if isTeacherOf(assignmentDoc(aid))
+          && request.resource.data.keys().hasOnly(
+               ['position', 'title', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm', 'status'])
+          && request.resource.data.status == 'working'
+          && validItemContent(request.resource.data);
+
+        allow update:
+          // Teacher: content only (never the student's status or recording).
+          if (isTeacherOf(assignmentDoc(aid))
+              && request.resource.data.diff(resource.data).affectedKeys()
+                   .hasOnly(['position', 'title', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm'])
+              && validItemContent(request.resource.data))
+          // Student: status and recording only.
+          || (isStudentOf(assignmentDoc(aid))
+              && validStudentItemChange(aid, itemId));
+
+        allow delete: if isTeacherOf(assignmentDoc(aid)) && !('recording' in resource.data);
+
+        // -----------------------------------------------------------
+        // Teacher replies on a recording
+        // -----------------------------------------------------------
+        match /comments/{commentId} {
+          allow read: if isStudentOf(assignmentDoc(aid)) || isTeacherOf(assignmentDoc(aid));
+
+          allow create: if isTeacherOf(assignmentDoc(aid))
+            && request.resource.data.keys().hasOnly(['authorId', 'text', 'createdAt', 'readAt'])
+            && request.resource.data.authorId == request.auth.uid
+            && validShortText(request.resource.data.text, 500)
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.readAt == null;
+
+          allow update:
+            // Teacher: edit own text.
+            if (isTeacherOf(assignmentDoc(aid))
+                && resource.data.authorId == request.auth.uid
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text'])
+                && validShortText(request.resource.data.text, 500))
+            // Student: mark as read, once.
+            || (isStudentOf(assignmentDoc(aid))
+                && resource.data.readAt == null
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt'])
+                && request.resource.data.readAt == request.time);
+
+          allow delete: if false;
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // practiceLogs/{id}
+    // ---------------------------------------------------------------
+
+    match /practiceLogs/{logId} {
+      allow read: if (signedIn() && resource.data.studentId == request.auth.uid)
+        || isTeacherOf(resource.data);
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(
+             ['studentId', 'teacherId', 'assignmentId', 'minutes', 'startedAt', 'endedAt'])
+        && request.resource.data.studentId == request.auth.uid
+        && exists(userPath(request.auth.uid))
+        && userDoc(request.auth.uid).role == 'student'
+        && 'teacherId' in userDoc(request.auth.uid)
+        && request.resource.data.teacherId == userDoc(request.auth.uid).teacherId
+        && request.resource.data.assignmentId is string
+        && assignmentDoc(request.resource.data.assignmentId).studentId == request.auth.uid
+        && request.resource.data.minutes is int
+        && request.resource.data.minutes >= 1
+        && request.resource.data.minutes <= 600
+        && request.resource.data.startedAt is timestamp
+        && request.resource.data.endedAt is timestamp;
+
+      allow update, delete: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // templates/{id}
+    // ---------------------------------------------------------------
+
+    function validTemplateContent(d) {
+      return validShortText(d.title, 100)
+        && (!('description' in d) || (d.description is string && d.description.size() <= 1000))
+        && d.dailyGoalMinutes is int
+        && d.dailyGoalMinutes >= 1
+        && d.dailyGoalMinutes <= 240;
+    }
+
+    match /templates/{tid} {
+      allow read: if isTeacherOf(resource.data);
+
+      allow create: if isApprovedTeacher()
+        && request.resource.data.keys().hasOnly(['teacherId', 'title', 'description', 'dailyGoalMinutes', 'createdAt'])
+        && request.resource.data.teacherId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && validTemplateContent(request.resource.data);
+
+      allow update: if isTeacherOf(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['title', 'description', 'dailyGoalMinutes'])
+        && validTemplateContent(request.resource.data);
+
+      allow delete: if isTeacherOf(resource.data);
+
+      match /items/{itemId} {
+        function validTemplateItem(d) {
+          return d.keys().hasOnly(
+                 ['position', 'title', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm'])
+            && d.position is int
+            && validShortText(d.title, 100)
+            && (!('sheetPath' in d) || validTeacherFilePath(d.sheetPath))
+            && (!('accompanimentPath' in d) || validTeacherFilePath(d.accompanimentPath))
+            && (!('youtubeUrl' in d) || (d.youtubeUrl is string && d.youtubeUrl.size() <= 200))
+            && (!('metronomeBpm' in d) || (d.metronomeBpm is int && d.metronomeBpm >= 20 && d.metronomeBpm <= 300));
+        }
+
+        allow read: if isTeacherOf(templateDoc(tid));
+        allow create, update: if isTeacherOf(templateDoc(tid)) && validTemplateItem(request.resource.data);
+        allow delete: if isTeacherOf(templateDoc(tid));
+      }
     }
   }
 }

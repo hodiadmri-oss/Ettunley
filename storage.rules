@@ -1,7 +1,85 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Placeholder: everything is closed until the full rules are written.
+
+    // ---------------------------------------------------------------
+    // Helpers (read the user profile from Firestore)
+    // ---------------------------------------------------------------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/(default)/documents/users/$(uid);
+    }
+
+    function userDoc(uid) {
+      return firestore.get(userPath(uid)).data;
+    }
+
+    function isApprovedTeacher() {
+      return signedIn()
+        && firestore.exists(userPath(request.auth.uid))
+        && userDoc(request.auth.uid).role == 'teacher'
+        && userDoc(request.auth.uid).teacherStatus == 'approved';
+    }
+
+    // Recording needs consent: self for adults, parent for minors. A missing
+    // consentAt field makes the rule fail, so a minor without consent is denied.
+    function canRecord() {
+      return signedIn()
+        && firestore.exists(userPath(request.auth.uid))
+        && userDoc(request.auth.uid).role == 'student'
+        && userDoc(request.auth.uid).consentAt != null;
+    }
+
+    // ---------------------------------------------------------------
+    // Sheet music and accompaniment: sheet-music/{teacherId}/{fileId}
+    // The teacher writes; the teacher and their linked students read.
+    // ---------------------------------------------------------------
+
+    match /sheet-music/{teacherId}/{fileId} {
+      allow read: if signedIn()
+        && ((request.auth.uid == teacherId && isApprovedTeacher())
+            || (firestore.exists(userPath(request.auth.uid))
+                && userDoc(request.auth.uid).role == 'student'
+                && userDoc(request.auth.uid).teacherId == teacherId));
+
+      allow create, update: if signedIn()
+        && request.auth.uid == teacherId
+        && isApprovedTeacher()
+        && request.resource.size <= 20 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|application/pdf|audio/mpeg');
+
+      allow delete: if signedIn() && request.auth.uid == teacherId && isApprovedTeacher();
+    }
+
+    // ---------------------------------------------------------------
+    // Recordings: recordings/{studentId}/{assignmentId}/{itemId}
+    // The student writes (only with consent); the student and their
+    // teacher read.
+    // ---------------------------------------------------------------
+
+    match /recordings/{studentId}/{assignmentId}/{itemId} {
+      allow read: if signedIn()
+        && (request.auth.uid == studentId
+            || (isApprovedTeacher()
+                && firestore.exists(userPath(studentId))
+                && userDoc(studentId).teacherId == request.auth.uid));
+
+      allow create, update: if signedIn()
+        && request.auth.uid == studentId
+        && canRecord()
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*')
+        // The recording must belong to a real assignment of this student.
+        && firestore.get(/databases/(default)/documents/assignments/$(assignmentId)).data.studentId == studentId;
+
+      allow delete: if false;
+    }
+
+    // Everything else is closed. No public files, ever.
     match /{allPaths=**} {
       allow read, write: if false;
     }
