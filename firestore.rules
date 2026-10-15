@@ -168,8 +168,14 @@ service cloud.firestore {
         && request.resource.data.role == resource.data.role
         && (
           (resource.data.role == 'teacher'
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
-            && validShortText(request.resource.data.name, 60))
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['name', 'copyrightStatementAt'])
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['name'])
+                || validShortText(request.resource.data.name, 60))
+            // The copyright statement is given once, with the server time.
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['copyrightStatementAt'])
+                || (!('copyrightStatementAt' in resource.data)
+                    && request.resource.data.copyrightStatementAt == request.time)))
           ||
           (resource.data.role == 'student'
             && validStudentProfileChange(

@@ -1123,3 +1123,38 @@ describe('teacher confirmation of new students, and removal', () => {
     await assertFails(getDoc(doc(as(ids.teacherA), 'parentConsents/pcP')))
   })
 })
+
+describe('teacher copyright statement', () => {
+  it('a teacher records the statement once, with the server time', async () => {
+    const ref = doc(as(ids.teacherPending), 'users/teacherPending')
+    await assertSucceeds(updateDoc(ref, { copyrightStatementAt: serverTimestamp() }))
+    await assertFails(updateDoc(ref, { copyrightStatementAt: serverTimestamp() }))
+  })
+
+  it('a pending teacher can give it, a fake time is refused', async () => {
+    await assertFails(
+      updateDoc(doc(as(ids.teacherPending), 'users/teacherPending'), { copyrightStatementAt: ts('2020-01-01') }),
+    )
+  })
+
+  it('a student cannot write it', async () => {
+    await assertFails(updateDoc(doc(as(ids.adultA), 'users/adultA'), { copyrightStatementAt: serverTimestamp() }))
+  })
+
+  it("a teacher cannot write it on someone else's profile", async () => {
+    await assertFails(updateDoc(doc(as(ids.teacherA), 'users/teacherPending'), { copyrightStatementAt: serverTimestamp() }))
+  })
+
+  it('it cannot be combined with a status change or an invite code', async () => {
+    await assertFails(
+      updateDoc(doc(as(ids.teacherPending), 'users/teacherPending'), {
+        copyrightStatementAt: serverTimestamp(), teacherStatus: 'approved',
+      }),
+    )
+    await assertFails(
+      updateDoc(doc(as(ids.teacherPending), 'users/teacherPending'), {
+        copyrightStatementAt: serverTimestamp(), inviteCode: 'ABCDEF',
+      }),
+    )
+  })
+})

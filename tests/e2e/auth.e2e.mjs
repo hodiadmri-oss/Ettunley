@@ -261,6 +261,70 @@ try {
   await page.waitForSelector('text=עוד רגע וסיימנו')
   check('teacher option is disabled for e-mail accounts', await page.locator('role=radio[name=/מורה/]').isDisabled())
   await shot(page, '10-choose-role-email-account')
+
+  // ---------- teacher approval by the owner ----------
+  // The owner's account: a Google account that has the admin claim (set the way the script does).
+  const ownerLogin = await fetch(`${authHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=x`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      postBody: `id_token=${encodeURIComponent(JSON.stringify({ sub: 'owner@example.com', email: 'owner@example.com', email_verified: true }))}&providerId=google.com`,
+      requestUri: 'http://localhost', returnIdpCredential: true, returnSecureToken: true,
+    }),
+  })
+  const ownerUid = (await ownerLogin.json()).localId
+  await fetch(`${authHost}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:update`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+    body: JSON.stringify({ localId: ownerUid, customAttributes: JSON.stringify({ admin: true }) }),
+  })
+
+  const danaUid = await uidOf('dana.teacher@example.com')
+  const owner = await newPage()
+  await holdGooglePopup(owner)
+  await owner.goto(`${BASE}/login`)
+  await owner.click('text=כניסה עם Google')
+  await owner.waitForTimeout(500)
+  await fakeGoogleSignIn(owner, 'owner@example.com', 'המנהלת')
+  await owner.waitForSelector('text=ממתינים לאישור (')
+  check('the owner goes straight to the admin page (no teacher/student profile needed)', owner.url().endsWith('/admin'))
+  check('the pending teacher is listed with her e-mail', (await owner.locator('main').innerText()).includes('dana.teacher@example.com'))
+  check('approve is locked while the copyright statement is missing', await owner.locator('article:has-text("דנה המורה") button:has-text("לאשר")').isDisabled())
+  await shot(owner, '17-admin-waiting-for-statement')
+
+  const danaPage = await newPage()
+  await holdGooglePopup(danaPage)
+  await danaPage.goto(`${BASE}/login`)
+  await danaPage.click('text=כניסה עם Google')
+  await danaPage.waitForTimeout(500)
+  await fakeGoogleSignIn(danaPage, 'dana.teacher@example.com', 'דנה המורה')
+  await danaPage.waitForSelector('text=החשבון שלך ממתין לאישור')
+  check('the teacher must tick the exact copyright statement', await danaPage.locator('text=אני מצהיר/ת שיש לי זכות להשתמש בחומרים שאעלה, ואני אחראי/ת לתוכן שלהם').count() === 1)
+  check('send is locked until she ticks it', await danaPage.locator('button:has-text("שליחה")').isDisabled())
+  await shot(danaPage, '18-teacher-pending-statement')
+  await danaPage.check('input[type=checkbox]')
+  await danaPage.click('button:has-text("שליחה")')
+  await danaPage.waitForSelector('input[type=checkbox]', { state: 'detached' })
+  check('the statement is stored once with a time', Boolean((await profileOf(danaUid)).copyrightStatementAt))
+
+  await owner.click('text=רענון')
+  await owner.waitForSelector('article:has-text("דנה המורה") >> text=✓ הצהרת זכויות יוצרים')
+  await shot(owner, '19-admin-ready-to-approve')
+  await owner.click('article:has-text("דנה המורה") button:has-text("לאשר")')
+  await owner.waitForSelector('text=לאשר את דנה המורה?')
+  await owner.click('button:has-text("כן")')
+  await owner.waitForSelector('text=מורים מאושרים (1)')
+  await shot(owner, '20-admin-approved')
+  const approved = await profileOf(danaUid)
+  check('approving sets the status and creates a 6-character invite code', approved.teacherStatus === 'approved' && /^[2-9A-HJKMNP-Z]{6}$/.test(approved.inviteCode), JSON.stringify(approved))
+
+  await danaPage.reload()
+  await danaPage.waitForSelector('text=ברוכה הבאה, מורה!')
+  check('the teacher sees she was approved', true)
+  check('an ordinary teacher gets no admin link and /admin sends her home', await (async () => {
+    await danaPage.goto(`${BASE}/admin`)
+    await danaPage.waitForSelector('text=שלום, דנה המורה')
+    return danaPage.url().endsWith('/home') && (await danaPage.locator('text=ניהול').count()) === 0
+  })())
+
 } finally {
   await browser.close()
   server.kill()

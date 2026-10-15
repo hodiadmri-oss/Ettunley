@@ -19,7 +19,9 @@ export type AuthState =
   | { status: 'loading' }
   | { status: 'signedOut' }
   | { status: 'needsProfile'; user: User }
-  | { status: 'ready'; user: User; profile: Profile }
+  // The owner's account: allowed into /admin even without a teacher/student profile.
+  | { status: 'adminOnly'; user: User }
+  | { status: 'ready'; user: User; profile: Profile; isAdmin: boolean }
 
 interface SignupIntent {
   role: Role
@@ -51,6 +53,13 @@ export function useAuth(): AuthApi {
   return value
 }
 
+// The admin claim is set by a script run by the owner. This only decides what to
+// show; the Cloud Functions check the claim again on every call.
+async function hasAdminClaim(user: User): Promise<boolean> {
+  const { claims } = await user.getIdTokenResult()
+  return claims.admin === true && claims.email_verified === true
+}
+
 export function isGoogleUser(user: User): boolean {
   return user.providerData.some((p) => p.providerId === 'google.com')
 }
@@ -70,9 +79,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({ status: 'loading' })
       try {
         const existing = await loadProfile(user.uid)
+        const isAdmin = await hasAdminClaim(user)
         if (existing) {
           intent.current = null
-          setState({ status: 'ready', user, profile: existing })
+          setState({ status: 'ready', user, profile: existing, isAdmin })
+          return
+        }
+        if (isAdmin) {
+          intent.current = null
+          setState({ status: 'adminOnly', user })
           return
         }
         const chosen = intent.current
@@ -80,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (chosen) {
           const name = cleanName(chosen.name) || cleanName(user.displayName) || 'משתמש/ת'
           const profile = await createProfile(user.uid, chosen.role, name)
-          setState({ status: 'ready', user, profile })
+          setState({ status: 'ready', user, profile, isAdmin: false })
         } else {
           setState({ status: 'needsProfile', user })
         }
@@ -139,13 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const user = auth.currentUser
           if (!user) return
           const profile = await createProfile(user.uid, role, cleanName(name) || 'משתמש/ת')
-          setState({ status: 'ready', user, profile })
+          setState({ status: 'ready', user, profile, isAdmin: false })
         }),
       reloadProfile: async () => {
         const user = auth.currentUser
         if (!user) return
         const profile = await loadProfile(user.uid)
-        if (profile) setState({ status: 'ready', user, profile })
+        if (profile) setState({ status: 'ready', user, profile, isAdmin: await hasAdminClaim(user) })
       },
       signOut: () => run(() => firebaseSignOut(auth)),
     }),

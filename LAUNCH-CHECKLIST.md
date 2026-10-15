@@ -9,6 +9,7 @@ whenever you talk about inviting more teachers. Tick items as you finish them.
 - [ ] Your Google account (the Firebase project owner) has 2-step verification, ideally a passkey or security key.
 - [ ] App Check is switched on; backups are switched on (Claude walks you through it).
 - [ ] The password-reset e-mail (Firebase console > Authentication > Templates): Hebrew text, a friendly sender name, and check that it does not land in spam. Later it can be sent from your own domain.
+- [ ] You made yourself the admin, following `docs/ADMIN-SETUP.md` (the first time on the real project; Claude walks you through it).
 - [ ] You tested the whole flow yourself with one real teacher and one student (a minor and an adult).
 - [ ] You know who answers privacy requests (you) and where they arrive (see next section).
 

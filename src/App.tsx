@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useState } from 'react'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { isOnboardingComplete } from '@/auth/profile'
+import Admin from '@/screens/Admin'
 import ChooseRole from '@/screens/ChooseRole'
 import Home from '@/screens/Home'
 import Onboarding from '@/screens/Onboarding'
@@ -48,6 +49,15 @@ function Router() {
     )
   }
 
+  if (state.status === 'adminOnly') {
+    return (
+      <Routes>
+        <Route path="/admin" element={<Admin />} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Routes>
+    )
+  }
+
   const uid = state.user.uid
   if (onboarding?.uid !== uid) {
     setOnboarding({ uid, active: !isOnboardingComplete(state.profile) })
@@ -60,6 +70,7 @@ function Router() {
   return (
     <Routes>
       <Route path="/home" element={<Home />} />
+      {state.isAdmin && <Route path="/admin" element={<Admin />} />}
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   )

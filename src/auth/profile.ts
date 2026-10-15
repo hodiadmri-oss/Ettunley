@@ -11,6 +11,9 @@ export interface Profile {
   createdAt?: Timestamp
   // Teachers only. Written by Cloud Functions, never by the client.
   teacherStatus?: 'pending' | 'approved' | 'rejected'
+  inviteCode?: string
+  /** When the teacher accepted the copyright statement (written once, by the teacher). */
+  copyrightStatementAt?: Timestamp
   // Students only.
   birthDate?: Timestamp
   isMinor?: boolean
@@ -68,4 +71,8 @@ export function isOnboardingComplete(profile: Profile): boolean {
   if (profile.role !== 'student') return true
   const basics = Boolean(profile.name && profile.birthDate && profile.instrument && profile.level)
   return basics && (profile.isMinor === true || Boolean(profile.consentAt))
+}
+
+export async function giveCopyrightStatement(uid: string): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), { copyrightStatementAt: serverTimestamp() })
 }
