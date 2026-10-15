@@ -86,6 +86,7 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 - Each item has a status: "עובד/ת על זה" / "מוכן!".
 - One recording per item, **max 3 minutes**. If a recording already exists, show a confirmation before replacing it: "כבר יש הקלטה לפריט הזה. להחליף אותה בהקלטה החדשה? ההקלטה הקודמת תימחק." with "להחליף" / "לבטל". On cancel, the new recording is discarded and the old one stays.
 - The teacher replies to a recording with short text.
+- **Copyright statement:** a teacher must tick "אני מצהיר/ת שיש לי זכות להשתמש בחומרים שאעלה, ואני אחראי/ת לתוכן שלהם" when they ask for approval and again at every upload of sheet music or backing tracks (the time is stored). The terms say the teacher is responsible and that the owner may remove any file; the owner can do that from `/admin`. Files stay private to the teacher and their confirmed students.
 - The teacher can save an assignment as a **template** and copy it to other students or other weeks.
 - Accompaniment player: play/stop only. Metronome: uses the item's BPM.
 

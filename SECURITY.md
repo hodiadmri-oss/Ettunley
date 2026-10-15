@@ -100,9 +100,9 @@ Decided:
 
 Open questions (asked in chat, answers go here):
 
-- Q1 Contact e-mail for privacy and deletion requests (privacy page and every parent e-mail).
+- Q1 Contact e-mail: **postponed by the owner** until wider launch; see `LAUNCH-CHECKLIST.md`. A placeholder setting is used until then.
 - Q2 Retention: **decided** — recordings are deleted 12 months after upload; users are told at sign-up.
-- Q3 Copyright: teachers upload sheet music and backing tracks. Suggestion: a required statement when a teacher is approved and at upload: "I have the right to use these materials", plus terms that make the teacher responsible and let the owner remove files.
+- Q3 Copyright: **decided** (statement at approval and at upload, owner can remove files); a lawyer check is on `LAUNCH-CHECKLIST.md`. Original suggestion: a required statement when a teacher is approved and at upload: "I have the right to use these materials", plus terms that make the teacher responsible and let the owner remove files.
 
 Legal notes written with the safest reading (not legal advice):
 - Under 18 always needs a parent's e-mail approval before any recording is stored. The consent record keeps the parent's name, the time and the version of the consent text.

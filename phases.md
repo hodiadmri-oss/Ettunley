@@ -27,7 +27,7 @@ Read CLAUDE.md. Build only the foundation, not the full screens:
 2. Firestore and Storage security rules for the **full** data model in CLAUDE.md, with rule tests (including the negative cases). Show me the test results and explain in Hebrew what they prove.
 3. Authentication: sign up, sign in (email+password and Google), sign out, role selection (teacher/student, immutable).
 4. Student onboarding: name, date of birth, instrument, level, and the consent step for adults.
-5. Teacher approval: pending-teacher screen, the admin claim script (walk me through running it on my own account), the `/admin` page with approve/reject, and the Cloud Function that approves and creates the teacher's invite code.
+5. Teacher approval: pending-teacher screen (with the copyright statement checkbox), the admin claim script (walk me through running it on my own account), the `/admin` page with approve/reject, and the Cloud Function that approves and creates the teacher's invite code.
 6. Linking a student to a teacher by invite code (Cloud Function) with **teacher confirmation**: the code creates a pending link; the teacher approves or rejects from the teacher home screen. Also: the teacher can remove a student and can generate a new invite code (Cloud Functions). Wrong-code attempts are rate-limited.
 7. Parental consent flow for minors: on the teacher's home screen, a simple list of minor students awaiting approval with an email field and send button; the Cloud Function that sends the email (use the emulator / log the email locally for now — no real email provider yet); the public consent page; status update.
 8. Deletion and privacy (see "Deleting data and privacy" in CLAUDE.md): "delete my account" for students and teachers, owner deletion from `/admin`, and the plain-Hebrew privacy notice. All of it tested in the emulator.
@@ -40,6 +40,8 @@ Don't build assignments, timer, recordings or the dashboard yet. Stop, tell me w
 ## Phase 2 — Assignments and templates
 
 Read CLAUDE.md. The teacher creates an assignment for a student from the phone: title, description, daily goal in minutes, and several items (sheet music image/PDF, accompaniment mp3, YouTube link, metronome BPM — all optional). The teacher can save an assignment as a template and create a new assignment from a template, for any of their students.
+
+Every upload of sheet music or backing tracks shows the copyright statement checkbox from CLAUDE.md; the owner can remove files from `/admin`.
 
 The student sees all their assignments chronologically, newest first, grouped by week, and can open each one and its items.
 
