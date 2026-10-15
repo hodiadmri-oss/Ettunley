@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "emulators": "firebase emulators:start --only auth,firestore,storage --project ettunley-61749",
-    "test:rules": "firebase emulators:exec --only firestore,storage --project ettunley-61749 \"vitest run\""
+    "test:rules": "firebase emulators:exec --only firestore,storage --project ettunley-61749 \"vitest run\"",
+    "test:e2e": "firebase emulators:exec --only auth,firestore,storage --project ettunley-61749 \"node tests/e2e/auth.e2e.mjs\""
   },
   "dependencies": {
     "@fontsource/heebo": "^5.3.0",
@@ -33,6 +34,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "firebase-tools": "^15.33.0",
     "oxlint": "^1.81.0",
+    "playwright-core": "^1.64.1",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",

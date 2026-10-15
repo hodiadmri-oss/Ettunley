@@ -1,18 +1,59 @@
-import '@/lib/firebase'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider, useAuth } from '@/auth/AuthProvider'
+import ChooseRole from '@/screens/ChooseRole'
+import Home from '@/screens/Home'
+import SignIn from '@/screens/SignIn'
+import SignUp from '@/screens/SignUp'
+import Welcome from '@/screens/Welcome'
+
+function Loading() {
+  return (
+    <main className="flex min-h-dvh items-center justify-center" aria-busy="true">
+      <p className="text-lg text-ink/60">רגע...</p>
+    </main>
+  )
+}
+
+// Decides where a person belongs, based only on their sign-in state.
+function Router() {
+  const { state } = useAuth()
+
+  if (state.status === 'loading') return <Loading />
+
+  if (state.status === 'signedOut') {
+    return (
+      <Routes>
+        <Route path="/welcome" element={<Welcome />} />
+        <Route path="/login" element={<SignIn />} />
+        <Route path="/signup" element={<SignUp />} />
+        <Route path="*" element={<Navigate to="/welcome" replace />} />
+      </Routes>
+    )
+  }
+
+  if (state.status === 'needsProfile') {
+    return (
+      <Routes>
+        <Route path="/choose-role" element={<ChooseRole />} />
+        <Route path="*" element={<Navigate to="/choose-role" replace />} />
+      </Routes>
+    )
+  }
+
+  return (
+    <Routes>
+      <Route path="/home" element={<Home />} />
+      <Route path="*" element={<Navigate to="/home" replace />} />
+    </Routes>
+  )
+}
 
 export default function App() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 p-6">
-      <h1 className="text-center text-3xl font-bold">אטונלי</h1>
-      <p className="text-center text-lg">תרגול מוזיקה בין השיעורים</p>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="demo">שם</Label>
-        <Input id="demo" placeholder="איך קוראים לך?" />
-      </div>
-      <Button size="large">התחלה</Button>
-    </main>
+    <BrowserRouter>
+      <AuthProvider>
+        <Router />
+      </AuthProvider>
+    </BrowserRouter>
   )
 }

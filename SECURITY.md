@@ -53,7 +53,7 @@ as small as possible:
   - The link must never change state on `GET` (mail scanners open links). Approval is a `POST` after the parent ticks the box.
   - Put the token in the URL fragment, serve that page with `Referrer-Policy: no-referrer` (already in `firebase.json`), identical errors for wrong/expired/used tokens, per-IP and per-token attempt limits.
   - The teacher can trigger an e-mail to an arbitrary address, so it can be abused as a spam relay: only for the teacher's own minor students without consent, at most 3 sends per student per day, fixed template, names length-limited and HTML-escaped, no free text from the teacher. Never log e-mail addresses or tokens.
-- **Auth settings** (console): keep "email enumeration protection" on, only the production domain (and `localhost` during development) as authorized domains, password minimum length 10, verification e-mail for e-mail/password accounts. The owner signs in with Google (verified e-mail) before the admin claim is set, by UID.
+- **Auth settings** (console): keep "email enumeration protection" on, only the production domain (and `localhost` during development) as authorized domains, password minimum length 8 (checked in the app; also set the Authentication password policy in the console in phase 7). E-mail verification is not required for students: a student account only ever sees its own data, and teachers must use Google (verified e-mail). The owner signs in with Google (verified e-mail) before the admin claim is set, by UID.
 - **Admin claim script**: runs only on the owner's computer, key file outside the repo, deleted after use.
 
 ### Phase 2 (assignments)
