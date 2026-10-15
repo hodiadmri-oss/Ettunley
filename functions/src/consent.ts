@@ -4,6 +4,7 @@ import { defineString } from 'firebase-functions/params'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { parseUid, requireApprovedTeacher } from './guards'
 import { resendApiKey, sendEmail } from './email'
+import { deleteRecordingsOf, deleteUserData } from './deletion'
 import { consumeAttempt, DAY_MS, ipKey } from './rateLimit'
 
 // Bump this when the text the parent ticks changes. The page sends the version it
@@ -60,6 +61,28 @@ function buildEmail(opts: { childName: string; teacherName: string; link: string
     `<p><a href="${escapeHtml(link)}" style="display:inline-block;background:#2f2a33;color:#fff;padding:12px 24px;border-radius:12px;text-decoration:none">לקריאת הפרטים ולאישור</a></p>` +
     `<p style="color:#666;font-size:14px">הקישור אישי ותקף ל-7 ימים. אם לא ציפיתם להודעה הזאת, אפשר להתעלם ממנה ולא יקרה כלום.</p>` +
     (hasContact ? `<p style="color:#666;font-size:14px">שאלות, ביטול או מחיקת מידע: ${escapeHtml(contact)}</p>` : '') +
+    `</div>`
+  return { subject, text, html }
+}
+
+function buildManageEmail(opts: { childName: string; link: string; contact: string }) {
+  const { childName, link, contact } = opts
+  const hasContact = !contact.endsWith('.invalid')
+  const subject = 'האישור נשמר'
+  const text = [
+    'שלום,',
+    `תודה. האישור ש${childName} ישתמש/תשתמש באפליקציה נשמר.`,
+    `בכל זמן אפשר לבטל את האישור או למחוק את כל המידע של ${childName} בקישור האישי הזה: ${link}`,
+    'כדאי לשמור את המייל הזה. מי שמחזיק בקישור יכול לבטל את האישור.',
+    ...(hasContact ? [`שאלות: ${contact}`] : []),
+  ].join('\n\n')
+  const html =
+    `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:16px;line-height:1.6;color:#2f2a33">` +
+    `<p>שלום,</p><p>תודה. האישור ש${escapeHtml(childName)} ישתמש/תשתמש באפליקציה נשמר.</p>` +
+    `<p>בכל זמן אפשר לבטל את האישור או למחוק את כל המידע של ${escapeHtml(childName)}: ` +
+    `<a href="${escapeHtml(link)}">לניהול האישור</a></p>` +
+    `<p style="color:#666;font-size:14px">כדאי לשמור את המייל הזה. מי שמחזיק בקישור יכול לבטל את האישור.</p>` +
+    (hasContact ? `<p style="color:#666;font-size:14px">שאלות: ${escapeHtml(contact)}</p>` : '') +
     `</div>`
   return { subject, text, html }
 }
@@ -150,7 +173,9 @@ export const getParentConsentInfo = onCall(async (request) => {
 })
 
 // The parent ticks the box and presses approve: a deliberate action, not a link click.
-export const approveParentConsent = onCall(async (request) => {
+// The parent also gets a second, personal link to withdraw the consent or delete the
+// child's data at any time (kept hashed, like the first one).
+export const approveParentConsent = onCall({ secrets: [resendApiKey] }, async (request) => {
   const parentName = typeof request.data?.parentName === 'string' ? request.data.parentName.trim().replace(/\s+/g, ' ') : ''
   if (parentName.length < 1 || parentName.length > 60) {
     throw new HttpsError('invalid-argument', 'צריך לכתוב שם.')
@@ -165,7 +190,8 @@ export const approveParentConsent = onCall(async (request) => {
   if (!found) throw badLink()
 
   const db = getFirestore()
-  await db.runTransaction(async (tx) => {
+  const manageToken = randomBytes(32).toString('base64url')
+  const { parentEmail, childName } = await db.runTransaction(async (tx) => {
     const consent = await tx.get(found.ref)
     const data = consent.data()
     // Re-check inside the transaction: the link can be used only once.
@@ -181,8 +207,63 @@ export const approveParentConsent = onCall(async (request) => {
       approvedAt: FieldValue.serverTimestamp(),
       consentTextVersion: CONSENT_TEXT_VERSION,
       tokenHash: FieldValue.delete(), // single use: the link stops working
+      manageTokenHash: sha256(manageToken),
     })
     tx.update(studentRef, { consentBy: 'parent', consentAt: FieldValue.serverTimestamp() })
+    return { parentEmail: String(data.parentEmail), childName: String(student.name) }
   })
-  return { status: 'approved' as const }
+
+  // A confirmation with the personal "manage" link. A failure here must not undo the
+  // approval. Afterwards the parent's address is not kept any more (data minimisation).
+  try {
+    const link = `${appUrl.value().replace(/\/$/, '')}/consent/manage#${manageToken}`
+    await sendEmail({ to: parentEmail, ...buildManageEmail({ childName, link, contact: privacyContact.value() }) })
+  } catch {
+    // the thank-you page shows the same link
+  }
+  await found.ref.update({ parentEmail: FieldValue.delete() })
+
+  return { status: 'approved' as const, manageToken }
+})
+
+async function findManageConsent(token: unknown): Promise<ConsentLookup | null> {
+  if (typeof token !== 'string' || !TOKEN_FORMAT.test(token)) return null
+  const snap = await getFirestore().collection('parentConsents').where('manageTokenHash', '==', sha256(token)).limit(1).get()
+  const doc = snap.docs[0]
+  return doc ? { ref: doc.ref, data: doc.data() } : null
+}
+
+export const getParentManageInfo = onCall(async (request) => {
+  const ip = ipKey(request.rawRequest?.ip)
+  if (ip && !(await consumeAttempt(ip, MAX_LINK_CHECKS_PER_IP_PER_HOUR))) return { valid: false as const }
+  const found = await findManageConsent(request.data?.token)
+  if (!found) return { valid: false as const }
+  const student = (await getFirestore().doc(`users/${found.data.studentId}`).get()).data()
+  if (!student) return { valid: false as const }
+  return { valid: true as const, childName: String(student.name), hasConsent: Boolean(student.consentAt) }
+})
+
+// "withdraw": the consent ends and the recordings are deleted (the reason for keeping
+// them is gone); the child can then use the app without recording.
+// "delete": everything of the child is deleted.
+export const manageParentConsent = onCall({ timeoutSeconds: 300 }, async (request) => {
+  const action = request.data?.action
+  if (action !== 'withdraw' && action !== 'delete') {
+    throw new HttpsError('invalid-argument', 'פעולה לא תקינה.')
+  }
+  const ip = ipKey(request.rawRequest?.ip)
+  if (ip && !(await consumeAttempt(ip, MAX_LINK_CHECKS_PER_IP_PER_HOUR))) throw badLink()
+  const found = await findManageConsent(request.data?.token)
+  if (!found) throw badLink()
+  const studentId = String(found.data.studentId)
+
+  if (action === 'delete') {
+    await deleteUserData(studentId)
+    return { status: 'deleted' as const }
+  }
+  const db = getFirestore()
+  await deleteRecordingsOf(studentId)
+  await db.doc(`users/${studentId}`).update({ consentBy: FieldValue.delete(), consentAt: FieldValue.delete() })
+  await found.ref.update({ withdrawnAt: FieldValue.serverTimestamp() })
+  return { status: 'withdrawn' as const }
 })

@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { ErrorNote } from '@/components/ErrorNote'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { DELETE_WORD, adminDeleteUser, adminLookupUser, type LookedUpUser } from '@/lib/accountApi'
 import { approveTeacher, listTeachers, rejectTeacher, type TeacherRow } from '@/lib/adminApi'
 
 type Action = { uid: string; kind: 'approve' | 'reject' }
@@ -15,6 +18,91 @@ function formatDate(ms: number | null): string {
 
 // Owner-only page. The page is only a convenience: the Cloud Functions it calls
 // check the admin claim themselves.
+const ROLE_LABEL = { teacher: 'מורה', student: 'תלמיד/ה', none: 'בלי פרופיל' } as const
+
+// For deletion requests that arrive by e-mail: find the person, confirm, delete for good.
+function DeleteByRequest() {
+  const [email, setEmail] = useState('')
+  const [found, setFound] = useState<LookedUpUser | null>(null)
+  const [notFound, setNotFound] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [done, setDone] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function lookup() {
+    setBusy(true)
+    setError(null)
+    setDone(false)
+    setFound(null)
+    setNotFound(false)
+    setTyped('')
+    try {
+      const result = await adminLookupUser(email)
+      if (result.found) setFound(result)
+      else setNotFound(true)
+    } catch {
+      setError('החיפוש לא הצליח. אפשר לנסות שוב.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove() {
+    if (!found) return
+    setBusy(true)
+    setError(null)
+    try {
+      await adminDeleteUser(found.uid)
+      setDone(true)
+      setFound(null)
+      setEmail('')
+      setTyped('')
+    } catch {
+      setError('המחיקה לא הצליחה. אפשר לנסות שוב.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section aria-labelledby="delete-request-title" className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm">
+      <h2 id="delete-request-title" className="text-xl font-bold">
+        מחיקה לפי בקשה
+      </h2>
+      <p className="text-sm text-ink/70">לבקשות שהגיעו במייל. מוחק לצמיתות את המשתמש/ת וכל המידע שלהם/ן.</p>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="delete-email">האימייל של המשתמש/ת</Label>
+        <Input id="delete-email" type="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} />
+      </div>
+      <Button variant="soft" disabled={busy || !email.includes('@')} onClick={() => void lookup()}>
+        חיפוש
+      </Button>
+      <ErrorNote message={error} />
+      {notFound && <p>לא נמצא משתמש/ת עם האימייל הזה.</p>}
+      {done && <p role="status" className="rounded-2xl bg-sage px-3 py-2">✓ נמחק</p>}
+      {found && (
+        <div className="flex flex-col gap-3 rounded-2xl bg-peach p-3">
+          <p>
+            <strong>{found.name || 'ללא שם'}</strong> ({ROLE_LABEL[found.role]})
+          </p>
+          {found.isAdmin ? (
+            <p>אי אפשר למחוק מנהלת מכאן.</p>
+          ) : (
+            <>
+              <Label htmlFor="admin-delete-word">לאישור כותבים: {DELETE_WORD}</Label>
+              <Input id="admin-delete-word" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+              <Button disabled={busy || typed.trim() !== DELETE_WORD} onClick={() => void remove()}>
+                מחיקה סופית
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export default function Admin() {
   const { state, signOut } = useAuth()
   const [teachers, setTeachers] = useState<TeacherRow[] | null>(null)
@@ -129,6 +217,8 @@ export default function Admin() {
           </section>
         </>
       )}
+
+      <DeleteByRequest />
 
       <footer className="flex flex-col gap-3">
         {hasProfile && (

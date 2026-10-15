@@ -10,8 +10,13 @@ export async function getParentConsentInfo(token: string): Promise<ConsentInfo> 
   return result.data
 }
 
-export async function approveParentConsent(token: string, parentName: string, textVersion: number): Promise<void> {
-  await httpsCallable(functions, 'approveParentConsent')({ token, parentName, textVersion })
+export async function approveParentConsent(token: string, parentName: string, textVersion: number): Promise<string> {
+  const result = await httpsCallable<unknown, { manageToken: string }>(functions, 'approveParentConsent')({
+    token,
+    parentName,
+    textVersion,
+  })
+  return result.data.manageToken
 }
 
 export async function sendParentConsent(studentId: string, parentEmail: string): Promise<void> {

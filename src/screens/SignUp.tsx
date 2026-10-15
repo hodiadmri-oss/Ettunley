@@ -97,6 +97,13 @@ export default function SignUp() {
         </div>
       )}
 
+      <p className="text-center text-sm text-ink/70">
+        ההקלטות נמחקות אוטומטית אחרי 12 חודשים, ואפשר למחוק את החשבון בכל זמן. בהמשך את/ה מאשר/ת שקראת את{' '}
+        <Link to="/privacy" className="underline">
+          מדיניות הפרטיות
+        </Link>
+        .
+      </p>
       <p className="text-center">
         כבר יש לך חשבון?{' '}
         <Link to="/login" className="font-medium underline">

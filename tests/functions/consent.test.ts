@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { Timestamp } from 'firebase/firestore'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { AdminTimestamp, adminDb, authUserExists, docData, docExists, fileExists, putFile } from './adminSdk'
 import {
   callAs, createEnv, createUser, emailsTo, errorCodeOf, patchDoc, putDoc, putUserDoc, readDoc, type TestUser,
 } from './helpers'
@@ -170,7 +171,9 @@ describe('approveParentConsent', () => {
     const teacher = await newTeacher()
     const student = await newStudent(teacher)
     const { token } = await sendAndGetToken(teacher, student)
-    expect(await approve(token)).toEqual({ status: 'approved' })
+    const result = (await approve(token)) as { status: string; manageToken: string }
+    expect(result.status).toBe('approved')
+    expect(result.manageToken).toMatch(/^[A-Za-z0-9_-]{43}$/)
 
     const profile = await readDoc(env, `users/${student.uid}`)
     expect(profile?.consentBy).toBe('parent')
@@ -181,6 +184,8 @@ describe('approveParentConsent', () => {
     expect(consent?.approvedAt).toBeInstanceOf(Timestamp)
     expect(consent?.consentTextVersion).toBe(1)
     expect(consent?.tokenHash).toBeUndefined()
+    expect(consent?.parentEmail).toBeUndefined() // the parent's address is not kept after approval
+    expect(consent?.manageTokenHash).toBe(sha256(result.manageToken))
 
     expect(await callAs(null, 'getParentConsentInfo', { token })).toEqual({ valid: false })
   })
@@ -221,5 +226,92 @@ describe('approveParentConsent', () => {
     await putDoc(env, `users/${student.uid}`, { role: 'student', name: 'נועה', isMinor: true })
     expect(await errorCodeOf(approve(token))).toBe('functions/failed-precondition')
     expect((await readDoc(env, `users/${student.uid}`))?.consentAt).toBeUndefined()
+  })
+})
+
+describe('the parent manage link (withdraw consent / delete the child\'s data)', () => {
+  const approveFor = async () => {
+    const teacher = await newTeacher()
+    const student = await newStudent(teacher)
+    const { token, email } = await sendAndGetToken(teacher, student)
+    const result = (await callAs(null, 'approveParentConsent', { token, parentName: 'אמא', textVersion: 1 })) as { manageToken: string }
+    return { teacher, student, email, manageToken: result.manageToken }
+  }
+  const manage = (token: unknown, action: unknown) => callAs(null, 'manageParentConsent', { token, action })
+
+  it('the parent gets a confirmation e-mail with the personal manage link', async () => {
+    const { email, manageToken } = await approveFor()
+    const mails = await emailsTo(env, email)
+    const confirmation = mails.find((m) => m.subject === 'האישור נשמר')
+    expect(confirmation?.text).toContain(`/consent/manage#${manageToken}`)
+  })
+
+  it('shows whose consent it is and whether it is still active', async () => {
+    const { manageToken } = await approveFor()
+    expect(await callAs(null, 'getParentManageInfo', { token: manageToken })).toEqual({
+      valid: true, childName: 'נועה', hasConsent: true,
+    })
+  })
+
+  it('withdrawing ends the consent and deletes the recordings, but keeps the child account', async () => {
+    const { student, manageToken } = await approveFor()
+    const db = adminDb()
+    await db.doc('assignments/wd1').set({ teacherId: 'x', studentId: student.uid, title: 't' })
+    await db.doc('assignments/wd1/items/i1').set({
+      position: 1, title: 'p', status: 'ready',
+      recording: { path: `recordings/${student.uid}/wd1/i1`, durationSeconds: 5, uploadedAt: AdminTimestamp.now() },
+    })
+    await putFile(`recordings/${student.uid}/wd1/i1`)
+
+    expect(await manage(manageToken, 'withdraw')).toEqual({ status: 'withdrawn' })
+    const profile = await readDoc(env, `users/${student.uid}`)
+    expect(profile?.consentAt).toBeUndefined()
+    expect(profile?.consentBy).toBeUndefined()
+    expect(profile?.name).toBe('נועה')
+    expect(await fileExists(`recordings/${student.uid}/wd1/i1`)).toBe(false)
+    expect((await docData('assignments/wd1/items/i1'))?.recording).toBeUndefined()
+    expect(await callAs(null, 'getParentManageInfo', { token: manageToken })).toMatchObject({ valid: true, hasConsent: false })
+  })
+
+  it('deleting removes the child and everything of theirs', async () => {
+    const { student, manageToken } = await approveFor()
+    expect(await manage(manageToken, 'delete')).toEqual({ status: 'deleted' })
+    expect(await docExists(`users/${student.uid}`)).toBe(false)
+    expect(await docExists(`parentConsents/${student.uid}`)).toBe(false)
+    expect(await authUserExists(student.uid)).toBe(false)
+    expect(await callAs(null, 'getParentManageInfo', { token: manageToken })).toEqual({ valid: false })
+  })
+
+  it('wrong, made-up and approval-link tokens manage nothing, and look the same', async () => {
+    const teacher = await newTeacher()
+    const student = await newStudent(teacher)
+    const { token: approvalToken } = await sendAndGetToken(teacher, student)
+    const answers = []
+    for (const token of ['A'.repeat(43), 'short', null, approvalToken]) {
+      answers.push(JSON.stringify(await callAs(null, 'getParentManageInfo', { token })))
+      answers.push(await errorCodeOf(manage(token, 'delete')))
+    }
+    expect(new Set(answers)).toEqual(new Set([JSON.stringify({ valid: false }), 'functions/failed-precondition']))
+    expect(await docExists(`users/${student.uid}`)).toBe(true)
+    expect(await errorCodeOf(manage('A'.repeat(43), 'explode'))).toBe('functions/invalid-argument')
+  })
+
+  it('a minor loses the parent consent when the teacher removes them (the next teacher needs a new one)', async () => {
+    const { teacher, student } = await approveFor()
+    await callAs(teacher, 'removeStudent', { studentId: student.uid })
+    const profile = await readDoc(env, `users/${student.uid}`)
+    expect(profile?.teacherId).toBeUndefined()
+    expect(profile?.consentAt).toBeUndefined()
+    expect(await docExists(`parentConsents/${student.uid}`)).toBe(false)
+  })
+
+  it('an adult keeps their own consent when the teacher removes them', async () => {
+    const teacher = await newTeacher()
+    const adult = await newStudent(teacher, { isMinor: false, consentBy: 'self', consentAt: Timestamp.now() })
+    await callAs(teacher, 'removeStudent', { studentId: adult.uid })
+    const profile = await readDoc(env, `users/${adult.uid}`)
+    expect(profile?.teacherId).toBeUndefined()
+    expect(profile?.consentBy).toBe('self')
+    expect(profile?.consentAt).toBeDefined()
   })
 })

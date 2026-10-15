@@ -134,6 +134,9 @@ export default function Home() {
           <Link to="/admin">ניהול</Link>
         </Button>
       )}
+      <Button asChild variant="soft">
+        <Link to="/settings">הגדרות ופרטיות</Link>
+      </Button>
       <Button variant="outline" onClick={() => void signOut()}>
         יציאה
       </Button>

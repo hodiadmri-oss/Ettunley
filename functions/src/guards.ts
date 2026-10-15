@@ -36,3 +36,11 @@ export async function requireApprovedTeacher(request: CallableRequest): Promise<
   }
   return uid
 }
+
+const RECENT_LOGIN_SECONDS = 5 * 60
+
+// Deleting an account needs a fresh sign-in, so a stolen open phone cannot do it.
+export function isRecentLogin(authTimeSeconds: unknown, nowMs: number = Date.now()): boolean {
+  if (typeof authTimeSeconds !== 'number') return false
+  return nowMs / 1000 - authTimeSeconds <= RECENT_LOGIN_SECONDS
+}

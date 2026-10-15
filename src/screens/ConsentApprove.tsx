@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Screen } from '@/components/Screen'
 import { ErrorNote } from '@/components/ErrorNote'
 import { Button } from '@/components/ui/button'
@@ -19,6 +20,7 @@ export default function ConsentApprove() {
   const [agreed, setAgreed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [manageToken, setManageToken] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -42,7 +44,7 @@ export default function ConsentApprove() {
     setBusy(true)
     setError(null)
     try {
-      await approveParentConsent(token, parentName, CONSENT_TEXT_VERSION)
+      setManageToken(await approveParentConsent(token, parentName, CONSENT_TEXT_VERSION))
       setView('done')
     } catch (e) {
       const code = (e as { code?: string }).code
@@ -76,6 +78,13 @@ export default function ConsentApprove() {
       <Screen title="תודה!">
         <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">
           האישור נשמר. {info.childName} יכול/ה עכשיו להקליט. אפשר לסגור את הדף.
+        </p>
+        <p className="rounded-2xl bg-sky px-4 py-3 text-center text-base">
+          לביטול האישור או למחיקת המידע בעתיד:{' '}
+          <a href={`/consent/manage#${manageToken}`} className="font-medium underline">
+            הקישור האישי שלך
+          </a>
+          . שלחנו אותו גם במייל.
         </p>
         <p className="text-center text-sm text-ink/70">
           ההקלטות נמחקות אוטומטית אחרי 12 חודשים.
@@ -115,7 +124,10 @@ export default function ConsentApprove() {
       </label>
       <p className="text-sm text-ink/70">
         ההקלטות נמחקות אוטומטית אחרי 12 חודשים, ואפשר לבקש מחיקה בכל זמן.
-        {HAS_PRIVACY_CONTACT && ` פניות: ${PRIVACY_CONTACT_EMAIL}.`}
+        {HAS_PRIVACY_CONTACT && ` פניות: ${PRIVACY_CONTACT_EMAIL}.`}{' '}
+        <Link to="/privacy" className="underline">
+          מדיניות פרטיות
+        </Link>
       </p>
       <ErrorNote message={error} />
       <Button size="large" disabled={!agreed || parentName.trim().length === 0 || busy} onClick={() => void approve()}>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { FormEvent } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { ErrorNote } from '@/components/ErrorNote'
@@ -53,6 +54,11 @@ export function EnterCode() {
           הצטרפות
         </Button>
       </form>
+      <p className="text-center">
+        <Link to="/settings" className="underline">
+          הגדרות ופרטיות
+        </Link>
+      </p>
       <Button type="button" variant="outline" onClick={() => void signOut()}>
         יציאה
       </Button>

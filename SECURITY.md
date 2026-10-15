@@ -68,6 +68,8 @@ as small as possible:
 - Functions: delete own account (re-login required, typed confirmation), owner deletes any user, parent withdraws consent from the e-mail link. Delete Storage objects and Firestore documents together; delete the Auth user last. Idempotent and resumable (a half-finished deletion can be re-run). Tests in the emulator that nothing of the user is left.
 - The parent's link ("manage / withdraw") is a separate long-lived token, stored hashed, usable only to withdraw consent or delete that child's data.
 
+- **Done in step 8:** deletion runs only in Functions (the rules still refuse client deletes) and is safe to repeat after a failure (it looks everything up by the person's id and removes the sign-in account last); deleting an account needs a sign-in from the last 5 minutes plus a typed word; the owner's "delete by request" cannot delete an admin or herself; the parent's manage link is a separate 256-bit token (hash only) and the approval link cannot be used as one; a parent's address is removed after approval; recordings are deleted 12 months after upload by a daily job (plus a sweep of orphan files); a minor's parent consent ends with the link to the teacher it named. Tests prove both that everything of the person goes and that nothing of anyone else is touched.
+
 ### Phases 3–4 (practice, recording)
 - Microphone rules from section 1. Replace/discard flow exactly as in `CLAUDE.md`.
 - Check the file really is audio on the server (Storage "finalize" function: magic bytes, size) because the declared type is client-chosen.

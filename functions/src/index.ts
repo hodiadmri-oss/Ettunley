@@ -7,4 +7,12 @@ initializeApp()
 
 export { approveTeacher, listTeachers, rejectTeacher } from './teachers'
 export { cancelJoinRequest, joinTeacher, regenerateInviteCode, removeStudent, respondToStudent } from './linking'
-export { approveParentConsent, getParentConsentInfo, sendParentConsent } from './consent'
+export {
+  approveParentConsent,
+  getParentConsentInfo,
+  getParentManageInfo,
+  manageParentConsent,
+  sendParentConsent,
+} from './consent'
+export { adminDeleteUser, adminLookupUser, deleteMyAccount } from './accounts'
+export { dailyRetention } from './retention'

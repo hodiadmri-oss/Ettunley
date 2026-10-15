@@ -4,10 +4,13 @@ import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { isOnboardingComplete } from '@/auth/profile'
 import Admin from '@/screens/Admin'
 import ConsentApprove from '@/screens/ConsentApprove'
+import ConsentManage from '@/screens/ConsentManage'
 import ChooseRole from '@/screens/ChooseRole'
 import Home from '@/screens/Home'
 import Onboarding from '@/screens/Onboarding'
+import Privacy from '@/screens/Privacy'
 import ResetPassword from '@/screens/ResetPassword'
+import Settings from '@/screens/Settings'
 import SignIn from '@/screens/SignIn'
 import SignUp from '@/screens/SignUp'
 import Welcome from '@/screens/Welcome'
@@ -71,6 +74,7 @@ function Router() {
   return (
     <Routes>
       <Route path="/home" element={<Home />} />
+      <Route path="/settings" element={<Settings />} />
       {state.isAdmin && <Route path="/admin" element={<Admin />} />}
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
@@ -82,7 +86,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {/* Public page for parents: needs no account. */}
+        <Route path="/consent/manage" element={<ConsentManage />} />
         <Route path="/consent/*" element={<ConsentApprove />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route
           path="*"
           element={

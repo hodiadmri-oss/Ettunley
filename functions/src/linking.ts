@@ -1,8 +1,9 @@
-import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { getFirestore } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { parseUid, requireApprovedTeacher, requireSignedIn } from './guards'
 import { generateInviteCode, INVITE_ALPHABET, INVITE_LENGTH } from './inviteCode'
 import { consumeAttempt, ipKey, resetAttempts } from './rateLimit'
+import { consentEndsWithLink, unlinkUpdate } from './unlink'
 
 const MAX_WRONG_CODES_PER_USER = 5
 const MAX_WRONG_CODES_PER_IP = 30
@@ -14,11 +15,6 @@ const CODE_FORMAT = new RegExp(`^[${INVITE_ALPHABET}]{${INVITE_LENGTH}}$`)
 // from the outside, so nobody can learn which codes exist.
 const invalidCode = () => new HttpsError('permission-denied', 'הקוד לא נכון.')
 
-const CLEAR_LINK = {
-  teacherId: FieldValue.delete(),
-  teacherName: FieldValue.delete(),
-  linkStatus: FieldValue.delete(),
-}
 
 // A student types the teacher's code. This only creates a *pending* link;
 // the teacher has to confirm.
@@ -74,7 +70,11 @@ async function changeStudentLink(
       throw new HttpsError('permission-denied', 'אין הרשאה.')
     }
     const update = change(data)
-    if (update) tx.update(ref, update)
+    if (update) {
+      tx.update(ref, update)
+      // The consent record belonged to the teacher who is leaving.
+      if (consentEndsWithLink(data)) tx.delete(db.doc(`parentConsents/${studentId}`))
+    }
   })
 }
 
@@ -93,7 +93,7 @@ export const respondToStudent = onCall(async (request) => {
       return { linkStatus: 'approved' }
     }
     if (student.linkStatus !== 'pending') throw new HttpsError('failed-precondition', 'הבקשה כבר לא ממתינה.')
-    return CLEAR_LINK
+    return unlinkUpdate(student)
   })
   return { status: decision === 'approve' ? ('approved' as const) : ('rejected' as const) }
 })
@@ -103,7 +103,7 @@ export const respondToStudent = onCall(async (request) => {
 export const removeStudent = onCall(async (request) => {
   const teacherUid = await requireApprovedTeacher(request)
   const studentId = parseUid(request.data?.studentId)
-  await changeStudentLink(teacherUid, studentId, () => CLEAR_LINK)
+  await changeStudentLink(teacherUid, studentId, (student) => unlinkUpdate(student))
   return { status: 'removed' as const }
 })
 
@@ -144,7 +144,7 @@ export const cancelJoinRequest = onCall(async (request) => {
     if (data.linkStatus !== 'pending') {
       throw new HttpsError('failed-precondition', 'אין בקשה שממתינה.')
     }
-    tx.update(ref, CLEAR_LINK)
+    tx.update(ref, unlinkUpdate(data))
   })
   return { status: 'cancelled' as const }
 })

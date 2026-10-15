@@ -11,7 +11,7 @@
     "emulators": "firebase emulators:start --only auth,firestore,storage --project ettunley-61749",
     "test:rules": "firebase emulators:exec --only firestore,storage --project ettunley-61749 \"vitest run tests/rules tests/unit\"",
     "test:e2e": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,storage,functions --project ettunley-61749 \"node tests/e2e/auth.e2e.mjs\"",
-    "test:functions": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project ettunley-61749 \"vitest run tests/functions\""
+    "test:functions": "npm --prefix functions run build && firebase emulators:exec --only auth,firestore,storage,functions --project ettunley-61749 \"vitest run tests/functions tests/unit\""
   },
   "dependencies": {
     "@fontsource/heebo": "^5.3.0",
