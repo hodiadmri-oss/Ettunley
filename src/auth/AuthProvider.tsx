@@ -2,6 +2,7 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -34,6 +35,8 @@ interface AuthApi {
   signUpWithGoogle: (role: Role) => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
+  /** True when the request went through. Never reveals whether the e-mail has an account. */
+  sendPasswordReset: (email: string) => Promise<boolean>
   completeProfile: (role: Role, name: string) => Promise<void>
   signOut: () => Promise<void>
 }
@@ -116,6 +119,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInWithEmail: (email, password) =>
         run(() => signInWithEmailAndPassword(auth, email.trim(), password)),
       signInWithGoogle: () => run(() => signInWithPopup(auth, new GoogleAuthProvider())),
+      sendPasswordReset: async (email) => {
+        setError(null)
+        try {
+          await sendPasswordResetEmail(auth, email.trim())
+          return true
+        } catch (e) {
+          const code = (e as { code?: string }).code
+          // Same answer whether or not the account exists.
+          if (code === 'auth/user-not-found') return true
+          setError(authErrorMessage(code))
+          return false
+        }
+      },
       completeProfile: (role, name) =>
         run(async () => {
           const user = auth.currentUser

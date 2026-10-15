@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import ChooseRole from '@/screens/ChooseRole'
 import Home from '@/screens/Home'
+import ResetPassword from '@/screens/ResetPassword'
 import SignIn from '@/screens/SignIn'
 import SignUp from '@/screens/SignUp'
 import Welcome from '@/screens/Welcome'
@@ -26,6 +27,7 @@ function Router() {
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/login" element={<SignIn />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/reset" element={<ResetPassword />} />
         <Route path="*" element={<Navigate to="/welcome" replace />} />
       </Routes>
     )

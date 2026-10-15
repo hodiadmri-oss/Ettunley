@@ -9,6 +9,7 @@ export function authErrorMessage(code: string | undefined): string | null {
     case 'auth/wrong-password':
     case 'auth/user-not-found':
     case 'auth/invalid-email':
+    case 'auth/missing-email':
       return 'האימייל או הסיסמה לא נכונים. אפשר לנסות שוב.'
     case 'auth/email-already-in-use':
       return 'כבר יש חשבון עם האימייל הזה. אפשר להיכנס אליו.'

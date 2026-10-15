@@ -8,6 +8,7 @@ whenever you talk about inviting more teachers. Tick items as you finish them.
 - [ ] Budget alert has several thresholds and goes to an inbox you really read.
 - [ ] Your Google account (the Firebase project owner) has 2-step verification, ideally a passkey or security key.
 - [ ] App Check is switched on; backups are switched on (Claude walks you through it).
+- [ ] The password-reset e-mail (Firebase console > Authentication > Templates): Hebrew text, a friendly sender name, and check that it does not land in spam. Later it can be sent from your own domain.
 - [ ] You tested the whole flow yourself with one real teacher and one student (a minor and an adult).
 - [ ] You know who answers privacy requests (you) and where they arrive (see next section).
 

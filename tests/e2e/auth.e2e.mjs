@@ -111,6 +111,45 @@ try {
   await page.waitForSelector('[role=alert]')
   check('a taken e-mail is explained', (await page.locator('[role=alert]').innerText()).includes('כבר יש חשבון'))
 
+  // ---------- forgot password ----------
+  const oobCodes = async () =>
+    (await (await fetch(`${authHost}/emulator/v1/projects/${PROJECT}/oobCodes`)).json()).oobCodes ?? []
+  await page.goto(`${BASE}/login`)
+  await page.click('text=שכחתי סיסמה')
+  await page.waitForSelector('text=איפוס סיסמה')
+  await shot(page, '11-reset-password')
+  await page.fill('#email', 'noa@example.com')
+  await page.click('text=שליחת קישור')
+  await page.waitForSelector('[role=status]')
+  const sentMessage = await page.locator('[role=status]').innerText()
+  const codes = (await oobCodes()).filter((c) => c.requestType === 'PASSWORD_RESET' && c.email === 'noa@example.com')
+  check('a reset e-mail is created for a real account', codes.length === 1)
+  await shot(page, '12-reset-sent')
+
+  const page2 = await newPage()
+  await page2.goto(`${BASE}/reset`)
+  await page2.fill('#email', 'nobody-here@example.com')
+  await page2.click('text=שליחת קישור')
+  await page2.waitForSelector('[role=status]')
+  check('an unknown e-mail gets the very same answer', (await page2.locator('[role=status]').innerText()) === sentMessage)
+  check('and no e-mail is created for it', !(await oobCodes()).some((c) => c.email === 'nobody-here@example.com'))
+
+  const reset = await fetch(`${authHost}/identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=x`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ oobCode: codes[0].oobCode, newPassword: 'brand-new-pass-7' }),
+  })
+  check('(emulator) the link in the e-mail sets a new password', reset.ok)
+  await page2.goto(`${BASE}/login`)
+  await page2.fill('#email', 'noa@example.com')
+  await page2.fill('#password', 'correct-horse-9')
+  await page2.click('button[type=submit]')
+  await page2.waitForSelector('[role=alert]')
+  check('the old password no longer works', true)
+  await page2.fill('#password', 'brand-new-pass-7')
+  await page2.click('button[type=submit]')
+  await page2.waitForSelector('text=שלום, נועה כהן')
+  check('the new password works', true)
+
   // ---------- teacher with Google ----------
   // The real Google pop-up needs apis.google.com, which this test machine cannot
   // reach. So the pop-up is held open (never answers) and the Auth emulator's

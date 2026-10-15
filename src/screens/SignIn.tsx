@@ -55,6 +55,9 @@ export default function SignIn() {
         <Button type="submit" size="large" disabled={busy}>
           כניסה
         </Button>
+        <Link to="/reset" className="text-center underline">
+          שכחתי סיסמה
+        </Link>
       </form>
       <p className="text-center">
         אין לך חשבון עדיין?{' '}

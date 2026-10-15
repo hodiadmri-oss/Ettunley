@@ -13,6 +13,8 @@ const app = initializeApp({
 })
 
 export const auth = getAuth(app)
+// E-mails from Firebase (password reset) are sent in Hebrew.
+auth.languageCode = 'he'
 export const db = getFirestore(app)
 export const storage = getStorage(app)
 
