@@ -49,6 +49,7 @@ as small as possible:
   - Verify the `admin` claim and `email_verified` of the caller; verify the target is a `pending` teacher; do it in one transaction; generate the code with collision retry.
   - The admin list needs the teacher's e-mail, which is not stored in Firestore: return it from a callable function using the Admin SDK instead of copying it into the database.
   - Do not approve a teacher whose e-mail is not verified.
+- **Done in step 7:** 256-bit random token, only its SHA-256 stored and deleted after use; 7-day expiry; viewing the link never changes anything (approval is a separate deliberate action with a name and a ticked box); the page asks `getParentConsentInfo` first, wrong / expired / used / made-up links all give the same answer; the token lives after `#` and the page is served without a referrer; sends limited to 3 per student and 20 per teacher per day, only for a confirmed minor without consent; names are HTML-escaped and no teacher text goes into the e-mail; the consent text version is stored. Still to do in step 8: the parent's "withdraw / delete" link.
 - **Parental consent**
   - Token: 32 random bytes, only its SHA-256 stored, 7-day expiry, single use (transaction), delete the hash after use.
   - The link must never change state on `GET` (mail scanners open links). Approval is a `POST` after the parent ticks the box.

@@ -5,6 +5,10 @@ export async function joinTeacher(code: string): Promise<void> {
   await httpsCallable(functions, 'joinTeacher')({ code })
 }
 
+export async function cancelJoinRequest(): Promise<void> {
+  await httpsCallable(functions, 'cancelJoinRequest')()
+}
+
 export async function respondToStudent(studentId: string, decision: 'approve' | 'reject'): Promise<void> {
   await httpsCallable(functions, 'respondToStudent')({ studentId, decision })
 }

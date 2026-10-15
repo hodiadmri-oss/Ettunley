@@ -71,6 +71,37 @@ function PendingTeacher() {
   )
 }
 
+// A confirmed student. Minors see whether the parent has approved recording yet.
+function StudentHome() {
+  const { state, reloadProfile } = useAuth()
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reloadProfile()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [reloadProfile])
+
+  if (state.status !== 'ready') return null
+  const { profile } = state
+  return (
+    <>
+      <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">
+        ברוכים הבאים! המורה שלך: {profile.teacherName}
+      </p>
+      {profile.isMinor && !profile.consentAt && (
+        <p className="rounded-2xl bg-sky px-4 py-4 text-center text-base">
+          ההקלטות ייפתחו אחרי שההורה יאשר במייל
+        </p>
+      )}
+      {profile.isMinor && profile.consentAt && (
+        <p className="rounded-2xl bg-sky px-4 py-4 text-center text-base">✓ ההורה אישר. אפשר להקליט</p>
+      )}
+    </>
+  )
+}
+
 // Placeholder until the real home screens exist (phase 1, step 9).
 export default function Home() {
   const { state, signOut } = useAuth()
@@ -96,9 +127,7 @@ export default function Home() {
           <StudentsList />
         </>
       ) : (
-        <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">
-          ברוכים הבאים! המורה שלך: {profile.teacherName}
-        </p>
+        <StudentHome />
       )}
       {isAdmin && (
         <Button asChild variant="soft">

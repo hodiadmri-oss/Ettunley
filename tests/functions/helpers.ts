@@ -111,3 +111,21 @@ export async function putDoc(env: RulesTestEnvironment, path: string, data: Reco
     await setDoc(doc(ctx.firestore(), path), data)
   })
 }
+
+// The e-mails the emulator "sent" (it only stores them), newest first.
+export async function emailsTo(env: RulesTestEnvironment, address: string) {
+  const { collection, getDocs, query, where } = await import('firebase/firestore')
+  let out: { subject: string; text: string; html: string; to: string }[] = []
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const snap = await getDocs(query(collection(ctx.firestore(), 'devOutbox'), where('to', '==', address)))
+    out = snap.docs.map((d) => d.data() as (typeof out)[number])
+  })
+  return out
+}
+
+export async function patchDoc(env: RulesTestEnvironment, path: string, data: Record<string, unknown>) {
+  const { updateDoc } = await import('firebase/firestore')
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), path), data)
+  })
+}

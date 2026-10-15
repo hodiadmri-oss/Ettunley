@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import type { Profile } from '@/auth/profile'
 import { ErrorNote } from '@/components/ErrorNote'
+import { ConsentRequest } from '@/components/ConsentRequest'
 import { Button } from '@/components/ui/button'
 import { calendarAge } from '@/lib/age'
 import { db } from '@/lib/firebase'
@@ -14,6 +15,8 @@ interface StudentRow {
   instrument?: string
   age: number | null
   linkStatus: 'pending' | 'approved'
+  isMinor: boolean
+  hasConsent: boolean
 }
 
 type Action = { uid: string; kind: 'approve' | 'reject' | 'remove' }
@@ -45,6 +48,8 @@ export function StudentsList() {
             instrument: p.instrument,
             age: p.birthDate ? calendarAge(p.birthDate.toDate()) : null,
             linkStatus: p.linkStatus ?? 'pending',
+            isMinor: p.isMinor === true,
+            hasConsent: Boolean(p.consentAt),
           }
         }),
       )
@@ -146,6 +151,7 @@ export function StudentsList() {
               <p className="text-lg font-bold">{row.name}</p>
               <p className="text-ink/70">{details(row)}</p>
             </div>
+            {row.isMinor && <ConsentRequest studentId={row.uid} hasConsent={row.hasConsent} onChanged={load} />}
             {confirming?.uid === row.uid && confirming.kind === 'remove' ? (
               <Confirm row={row} kind="remove" />
             ) : (

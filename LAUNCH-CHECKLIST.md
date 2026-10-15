@@ -9,6 +9,8 @@ whenever you talk about inviting more teachers. Tick items as you finish them.
 - [ ] Your Google account (the Firebase project owner) has 2-step verification, ideally a passkey or security key.
 - [ ] App Check is switched on; backups are switched on (Claude walks you through it).
 - [ ] The password-reset e-mail (Firebase console > Authentication > Templates): Hebrew text, a friendly sender name, and check that it does not land in spam. Later it can be sent from your own domain.
+- [ ] **Parent e-mails go out for real** (Claude walks you through it, step by step): an account with the e-mail service (Resend), a sending address, and the API key stored as a Functions secret. Until then nothing is sent: in the emulator the e-mail is only stored. Also set the two production settings `APP_URL` (the app's web address, used in the link) and `EMAIL_FROM`.
+- [ ] **The privacy contact address** appears in two places in the code: `PRIVACY_CONTACT_EMAIL` in `src/lib/strings.ts` and the `PRIVACY_CONTACT_EMAIL` setting of the Functions. Until a real address is set, the contact sentence is left out of the parent e-mail and page.
 - [ ] You made yourself the admin, following `docs/ADMIN-SETUP.md` (the first time on the real project; Claude walks you through it).
 - [ ] You tested the whole flow yourself with one real teacher and one student (a minor and an adult).
 - [ ] You know who answers privacy requests (you) and where they arrive (see next section).

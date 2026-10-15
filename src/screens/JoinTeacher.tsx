@@ -6,7 +6,7 @@ import { Screen } from '@/components/Screen'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { joinErrorMessage, joinTeacher } from '@/lib/linkApi'
+import { cancelJoinRequest, joinErrorMessage, joinTeacher } from '@/lib/linkApi'
 
 // A student without a teacher types the teacher's code. That only sends a request;
 // the teacher has to confirm it.
@@ -63,6 +63,9 @@ export function EnterCode() {
 // The request was sent; waiting for the teacher.
 export function WaitingForTeacher({ teacherName }: { teacherName: string }) {
   const { reloadProfile, signOut } = useAuth()
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Look again when the student comes back to the tab, so the approval shows up.
   useEffect(() => {
@@ -73,14 +76,45 @@ export function WaitingForTeacher({ teacherName }: { teacherName: string }) {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [reloadProfile])
 
+  async function cancel() {
+    setBusy(true)
+    setError(null)
+    try {
+      await cancelJoinRequest()
+      await reloadProfile()
+    } catch {
+      setError('לא הצלחנו לבטל. אפשר לרענן ולנסות שוב.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Screen title="ממתינים לאישור המורה" subtitle={teacherName}>
       <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">
         שלחנו בקשה. ברגע שהמורה תאשר, אפשר להתחיל.
       </p>
+      <ErrorNote message={error} />
       <Button type="button" variant="soft" onClick={() => void reloadProfile()}>
         בדיקה מחדש
       </Button>
+      {confirming ? (
+        <div className="flex flex-col gap-2 rounded-2xl bg-peach p-3">
+          <p>לבטל את הבקשה ל{teacherName}? אפשר יהיה להקליד קוד אחר.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button disabled={busy} onClick={() => void cancel()}>
+              כן, לבטל
+            </Button>
+            <Button variant="outline" disabled={busy} onClick={() => setConfirming(false)}>
+              לא
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setConfirming(true)} className="text-center underline">
+          טעיתי בקוד? ביטול הבקשה
+        </button>
+      )}
       <Button type="button" variant="outline" onClick={() => void signOut()}>
         יציאה
       </Button>

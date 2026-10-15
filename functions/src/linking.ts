@@ -1,6 +1,6 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
-import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https'
-import { parseUid } from './guards'
+import { HttpsError, onCall } from 'firebase-functions/v2/https'
+import { parseUid, requireApprovedTeacher, requireSignedIn } from './guards'
 import { generateInviteCode, INVITE_ALPHABET, INVITE_LENGTH } from './inviteCode'
 import { consumeAttempt, ipKey, resetAttempts } from './rateLimit'
 
@@ -13,22 +13,6 @@ const CODE_FORMAT = new RegExp(`^[${INVITE_ALPHABET}]{${INVITE_LENGTH}}$`)
 // "no such code", "wrong format", "not allowed to try again yet" all look the same
 // from the outside, so nobody can learn which codes exist.
 const invalidCode = () => new HttpsError('permission-denied', 'הקוד לא נכון.')
-
-function requireSignedIn(request: CallableRequest): string {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'יש להתחבר.')
-  return request.auth.uid
-}
-
-// Only an approved teacher may manage students (the rules say the same).
-async function requireApprovedTeacher(request: CallableRequest): Promise<string> {
-  const uid = requireSignedIn(request)
-  const snap = await getFirestore().doc(`users/${uid}`).get()
-  const data = snap.data()
-  if (!snap.exists || data?.role !== 'teacher' || data.teacherStatus !== 'approved') {
-    throw new HttpsError('permission-denied', 'אין הרשאה.')
-  }
-  return uid
-}
 
 const CLEAR_LINK = {
   teacherId: FieldValue.delete(),
@@ -143,4 +127,24 @@ export const regenerateInviteCode = onCall(async (request) => {
     if (created) return { status: 'done' as const }
   }
   throw new HttpsError('internal', 'לא הצלחנו ליצור קוד חדש. אפשר לנסות שוב.')
+})
+
+// A student who typed a wrong teacher's code can take the request back, but only
+// while it is still waiting. Once the teacher confirmed, only the teacher can remove.
+export const cancelJoinRequest = onCall(async (request) => {
+  const uid = requireSignedIn(request)
+  const db = getFirestore()
+  await db.runTransaction(async (tx) => {
+    const ref = db.doc(`users/${uid}`)
+    const snap = await tx.get(ref)
+    const data = snap.data()
+    if (!snap.exists || data?.role !== 'student') {
+      throw new HttpsError('permission-denied', 'אין הרשאה.')
+    }
+    if (data.linkStatus !== 'pending') {
+      throw new HttpsError('failed-precondition', 'אין בקשה שממתינה.')
+    }
+    tx.update(ref, CLEAR_LINK)
+  })
+  return { status: 'cancelled' as const }
 })

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { isOnboardingComplete } from '@/auth/profile'
 import Admin from '@/screens/Admin'
+import ConsentApprove from '@/screens/ConsentApprove'
 import ChooseRole from '@/screens/ChooseRole'
 import Home from '@/screens/Home'
 import Onboarding from '@/screens/Onboarding'
@@ -79,9 +80,18 @@ function Router() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Router />
-      </AuthProvider>
+      <Routes>
+        {/* Public page for parents: needs no account. */}
+        <Route path="/consent/*" element={<ConsentApprove />} />
+        <Route
+          path="*"
+          element={
+            <AuthProvider>
+              <Router />
+            </AuthProvider>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   )
 }

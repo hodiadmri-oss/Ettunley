@@ -224,3 +224,35 @@ describe('regenerateInviteCode', () => {
   })
 })
 
+
+describe('cancelJoinRequest', () => {
+  it('takes a waiting request back, so the student can type another code', async () => {
+    const wrong = await newTeacher()
+    const right = await newTeacher()
+    const student = await newStudent({ instrument: 'גיטרה' })
+    await join(student, wrong.code)
+    expect(await callAs(student, 'cancelJoinRequest')).toEqual({ status: 'cancelled' })
+    const profile = await readDoc(env, `users/${student.uid}`)
+    expect(profile?.teacherId).toBeUndefined()
+    expect(profile?.linkStatus).toBeUndefined()
+    expect(profile?.instrument).toBe('גיטרה')
+    expect(await join(student, right.code)).toEqual({ status: 'pending' })
+  })
+
+  it('does nothing once the teacher confirmed: only the teacher can remove', async () => {
+    const teacher = await newTeacher()
+    const student = await newStudent()
+    await join(student, teacher.code)
+    await respond(teacher.user, student.uid, 'approve')
+    expect(await errorCodeOf(callAs(student, 'cancelJoinRequest'))).toBe('functions/failed-precondition')
+    expect((await readDoc(env, `users/${student.uid}`))?.linkStatus).toBe('approved')
+  })
+
+  it('refuses a student without a request, a teacher and a signed-out caller', async () => {
+    const teacher = await newTeacher()
+    const student = await newStudent()
+    expect(await errorCodeOf(callAs(student, 'cancelJoinRequest'))).toBe('functions/failed-precondition')
+    expect(await errorCodeOf(callAs(teacher.user, 'cancelJoinRequest'))).toBe('functions/permission-denied')
+    expect(await errorCodeOf(callAs(null, 'cancelJoinRequest'))).toBe('functions/unauthenticated')
+  })
+})

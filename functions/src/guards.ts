@@ -1,3 +1,4 @@
+import { getFirestore } from 'firebase-admin/firestore'
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https'
 
 // The admin claim is set once, by a script run by the owner. The verified
@@ -18,4 +19,20 @@ export function parseUid(value: unknown): string {
     throw new HttpsError('invalid-argument', 'מזהה לא תקין.')
   }
   return value
+}
+
+export function requireSignedIn(request: CallableRequest): string {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'יש להתחבר.')
+  return request.auth.uid
+}
+
+// Only an approved teacher may manage students (the rules say the same).
+export async function requireApprovedTeacher(request: CallableRequest): Promise<string> {
+  const uid = requireSignedIn(request)
+  const snap = await getFirestore().doc(`users/${uid}`).get()
+  const data = snap.data()
+  if (!snap.exists || data?.role !== 'teacher' || data.teacherStatus !== 'approved') {
+    throw new HttpsError('permission-denied', 'אין הרשאה.')
+  }
+  return uid
 }

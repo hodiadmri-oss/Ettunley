@@ -6,4 +6,5 @@ setGlobalOptions({ region: 'me-west1', maxInstances: 5 })
 initializeApp()
 
 export { approveTeacher, listTeachers, rejectTeacher } from './teachers'
-export { joinTeacher, regenerateInviteCode, removeStudent, respondToStudent } from './linking'
+export { cancelJoinRequest, joinTeacher, regenerateInviteCode, removeStudent, respondToStudent } from './linking'
+export { approveParentConsent, getParentConsentInfo, sendParentConsent } from './consent'
