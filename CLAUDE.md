@@ -55,14 +55,14 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 - **Teachers need the owner's approval.** A new teacher starts as `teacherStatus: pending` and sees only: "החשבון שלך ממתין לאישור. נעדכן אותך כשהוא יאושר." Until approved, a teacher has no invite code and cannot do anything as a teacher (enforced in rules and Functions, not only in the UI).
 - **Owner admin:** the owner's account gets an `admin` custom claim, set once with a script run locally (never from the client). Only an admin can open `/admin`: a simple, mobile-friendly list of pending teachers (name, email, sign-up date) with "לאשר" / "לדחות" buttons, plus the list of approved teachers. Approving calls a Cloud Function that checks the admin claim, sets `teacherStatus: approved`, and creates the teacher's invite code. Rejecting sets `teacherStatus: rejected`. No notifications — the owner checks `/admin` herself.
 - **Students are asked for their date of birth** (store the date, not an age). Based on it:
-  - **Under 18 (minor):** consent comes from the parent by email — see "Parental consent" below. Until approved, the minor can view assignments and practice, but **cannot record or upload recordings**. Instead of the record button show: "ההקלטות ייפתחו אחרי שההורה יאשר במייל".
-  - **18 and over (adult):** the student confirms a required checkbox: "אני מאשר/ת שהקלטות התרגול יישמרו וישותפו רק עם המורה". Store when it was given.
+  - **Under 18 (minor):** consent comes from the parent by email — see "Parental consent" below. Until approved, the minor can view assignments and practice, but **cannot record or upload recordings**. The parent approves **once** (not per assignment); after that the child records freely. Instead of the record button show: "ההקלטות ייפתחו אחרי שההורה יאשר במייל".
+  - **18 and over (adult):** the student confirms a required checkbox: "אני מאשר/ת שהקלטות התרגול יישמרו וישותפו עם המורה שלי". Store when it was given.
 - **Student onboarding:** name, date of birth, instrument, level (מתחיל/בינוני/מתקדם), then the consent step for adults. One screen where possible; save each field as soon as it changes, not only at the end.
 
 ### Parental consent (minors)
 1. The minor signs up and enters the teacher's invite code like any student.
 2. On the teacher's side, next to that student: "ממתין לאישור הורה", an email field for the parent, and a "שליחה" button. **The teacher enters the parent's email.**
-3. The teacher can send it only for a student they have already confirmed. A Cloud Function sends the parent a Hebrew email with a personal one-time link (valid 7 days). On the link's page the parent enters their name and checks: "אני ההורה/האפוטרופוס ומאשר/ת ש[שם הילד] ישתמש/תשתמש באפליקציה ושהקלטות התרגול יישמרו וישותפו רק עם המורה [שם המורה]". The parent does not need an account.
+3. The teacher can send it only for a student they have already confirmed. A Cloud Function sends the parent a Hebrew email with a personal one-time link (valid 7 days). On the link's page the parent enters their name and checks: "אני ההורה/האפוטרופוס ומאשר/ת ש[שם הילד] ישתמש/תשתמש באפליקציה ושהקלטות התרגול יישמרו וישותפו עם המורה [שם המורה]". The parent does not need an account.
 4. The teacher can resend or fix the email. When the parent approves, the teacher sees "אושר".
 5. The token is random, stored only as a hash, single-use, and verified only inside a Cloud Function.
 

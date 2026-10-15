@@ -1,7 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useState } from 'react'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
+import { isOnboardingComplete } from '@/auth/profile'
 import ChooseRole from '@/screens/ChooseRole'
 import Home from '@/screens/Home'
+import Onboarding from '@/screens/Onboarding'
 import ResetPassword from '@/screens/ResetPassword'
 import SignIn from '@/screens/SignIn'
 import SignUp from '@/screens/SignUp'
@@ -18,6 +21,9 @@ function Loading() {
 // Decides where a person belongs, based only on their sign-in state.
 function Router() {
   const { state } = useAuth()
+  // Decided once per person: if onboarding is needed it stays on screen until they
+  // press "סיום", so they can read the notices even after the last field was saved.
+  const [onboarding, setOnboarding] = useState<{ uid: string; active: boolean } | null>(null)
 
   if (state.status === 'loading') return <Loading />
 
@@ -40,6 +46,15 @@ function Router() {
         <Route path="*" element={<Navigate to="/choose-role" replace />} />
       </Routes>
     )
+  }
+
+  const uid = state.user.uid
+  if (onboarding?.uid !== uid) {
+    setOnboarding({ uid, active: !isOnboardingComplete(state.profile) })
+    return <Loading />
+  }
+  if (onboarding.active) {
+    return <Onboarding onDone={() => setOnboarding({ uid, active: false })} />
   }
 
   return (

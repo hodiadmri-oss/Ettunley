@@ -38,6 +38,8 @@ interface AuthApi {
   /** True when the request went through. Never reveals whether the e-mail has an account. */
   sendPasswordReset: (email: string) => Promise<boolean>
   completeProfile: (role: Role, name: string) => Promise<void>
+  /** Re-reads the profile after it was changed (for example during onboarding). */
+  reloadProfile: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -139,6 +141,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const profile = await createProfile(user.uid, role, cleanName(name) || 'משתמש/ת')
           setState({ status: 'ready', user, profile })
         }),
+      reloadProfile: async () => {
+        const user = auth.currentUser
+        if (!user) return
+        const profile = await loadProfile(user.uid)
+        if (profile) setState({ status: 'ready', user, profile })
+      },
       signOut: () => run(() => firebaseSignOut(auth)),
     }),
     [state, error, run],

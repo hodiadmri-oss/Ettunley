@@ -35,6 +35,19 @@ const uidOf = async (email) => {
   return users.find((u) => u.email === email)?.localId
 }
 
+
+const isoYearsAgo = (years) => new Date(Date.now() - years * 365.25 * 86400000).toISOString().slice(0, 10)
+const confirmBirthDate = async (page, iso) => {
+  await page.fill('#birth', iso)
+  await page.click('text=אישור תאריך הלידה')
+  await page.waitForSelector('text=(אי אפשר לשנות)')
+}
+const pickInstrumentAndLevel = async (page) => {
+  await page.selectOption('#instrument', 'פסנתר')
+  await page.click('role=radio[name=/מתחיל/]')
+  await page.waitForFunction(() => document.querySelector('[role=radio][aria-checked=true]'))
+}
+
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })
 const newPage = async () => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'he-IL', deviceScaleFactor: 2 })
@@ -73,12 +86,38 @@ try {
 
   await page.fill('#password', 'correct-horse-9')
   await page.click('text=יצירת חשבון')
-  await page.waitForSelector('text=שלום, נועה כהן')
-  check('student lands on the home screen', page.url().endsWith('/home'))
-  await shot(page, '5-home-student')
+  await page.waitForSelector('text=כמה פרטים עליך')
   const noaUid = await uidOf('noa@example.com')
   const noa = await profileOf(noaUid)
   check('student profile saved with role=student and no extra fields', noa?.role === 'student' && noa.name === 'נועה כהן' && !('teacherStatus' in noa), JSON.stringify(noa))
+  check('a new student is taken to onboarding first', true)
+  await shot(page, '13-onboarding-start')
+
+  // ---------- onboarding as an ADULT ----------
+  check('the instrument list has cello', (await page.locator('#instrument option').allInnerTexts()).includes('צ׳לו'))
+  await page.fill('#birth', '1990-05-01')
+  await page.waitForSelector('text=הגיל: 3')
+  await shot(page, '14-onboarding-age')
+  await page.click('text=אישור תאריך הלידה')
+  await page.waitForSelector('text=(אי אפשר לשנות)')
+  check('birth date and isMinor are saved together, once', await profileOf(noaUid).then((p) => p.isMinor === false && p.birthDate?.startsWith('1990-05-01')))
+  check('the date can no longer be edited', (await page.locator('#birth').count()) === 0)
+  await pickInstrumentAndLevel(page)
+  const fields = await profileOf(noaUid)
+  check('instrument and level are saved immediately', fields.instrument === 'פסנתר' && fields.level === 'beginner', JSON.stringify(fields))
+  await page.reload()
+  await page.waitForSelector('text=(אי אפשר לשנות)')
+  check('after a reload the saved fields are still there', (await page.inputValue('#instrument')) === 'פסנתר')
+  check('an adult sees the consent checkbox with the agreed wording', await page.locator('text=אני מאשר/ת שהקלטות התרגול יישמרו וישותפו עם המורה שלי.').count() === 1)
+  check('the Finish button is locked until the box is ticked', await page.locator('button:has-text("סיום")').isDisabled())
+  await shot(page, '15-onboarding-adult-consent')
+  await page.check('input[type=checkbox]')
+  await page.click('button:has-text("סיום")')
+  await page.waitForSelector('text=שלום, נועה כהן')
+  check('student lands on the home screen', page.url().endsWith('/home'))
+  await shot(page, '5-home-student')
+  const adult = await profileOf(noaUid)
+  check('adult consent is stored as self with a time', adult.consentBy === 'self' && Boolean(adult.consentAt), JSON.stringify(adult))
 
   // ---------- sign out, wrong password, sign in ----------
   await page.click('text=יציאה')
@@ -194,8 +233,19 @@ try {
   await shot(page, '9-choose-role')
   await page.click('role=radio[name=/תלמיד/]')
   await page.click('text=המשך')
+  await page.waitForSelector('text=כמה פרטים עליך')
+
+  // ---------- onboarding as a MINOR ----------
+  await confirmBirthDate(page, isoYearsAgo(10))
+  await pickInstrumentAndLevel(page)
+  check('a minor sees the recording-locked notice (exact text)', await page.locator('text=ההקלטות ייפתחו אחרי שההורה יאשר במייל').count() === 1)
+  check('and that the parent approves only once', await page.locator('text=ההורה מאשר פעם אחת בלבד').count() === 1)
+  check('and no consent checkbox', (await page.locator('input[type=checkbox]').count()) === 0)
+  await shot(page, '16-onboarding-minor')
+  await page.click('button:has-text("סיום")')
   await page.waitForSelector('text=שלום, יעל')
-  check('then lands on the student home', (await profileOf(await uidOf('yael.new@example.com')))?.role === 'student')
+  const yael = await profileOf(await uidOf('yael.new@example.com'))
+  check('a minor is stored as isMinor=true WITHOUT any consent', yael.role === 'student' && yael.isMinor === true && !('consentAt' in yael), JSON.stringify(yael))
 
   // ---------- e-mail account without profile cannot become a teacher ----------
   const signUpRaw = await fetch(`${authHost}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=x`, {
