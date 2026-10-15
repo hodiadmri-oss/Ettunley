@@ -6,3 +6,4 @@ setGlobalOptions({ region: 'me-west1', maxInstances: 5 })
 initializeApp()
 
 export { approveTeacher, listTeachers, rejectTeacher } from './teachers'
+export { joinTeacher, regenerateInviteCode, removeStudent, respondToStudent } from './linking'

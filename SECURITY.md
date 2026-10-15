@@ -44,6 +44,7 @@ as small as possible:
   - Rate-limit wrong guesses per user (e.g. 5 per hour, then lock out) and per IP. Brute force over about 10^9 codes would otherwise let a stranger attach to a teacher.
   - Same answer for "no such code" and "code locked". Enforce App Check. Do not log codes.
   - Sets `teacherId`, `teacherName` and `linkStatus: pending` on the student (Functions only; rules already forbid the client). Approve / reject / remove / regenerate-code are also Functions that check the caller is that teacher.
+- **Done in step 6:** wrong-code lock (5 wrong tries per student per hour, 30 per IP address per hour; the address is stored only as a hash, in `rateLimits/*` which no client can touch), identical answer for wrong / malformed / locked, a code works only while its teacher is approved and it is the teacher's current code, joining only creates a *pending* link, and the teacher's decisions run in Functions that check the student is theirs.
 - **Teacher approval function**
   - Verify the `admin` claim and `email_verified` of the caller; verify the target is a `pending` teacher; do it in one transaction; generate the code with collision retry.
   - The admin list needs the teacher's e-mail, which is not stored in Firestore: return it from a callable function using the Admin SDK instead of copying it into the database.

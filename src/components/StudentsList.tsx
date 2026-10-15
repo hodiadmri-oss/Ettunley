@@ -1,0 +1,165 @@
+import { collection, getDocs, limit, query, where } from 'firebase/firestore'
+import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from '@/auth/AuthProvider'
+import type { Profile } from '@/auth/profile'
+import { ErrorNote } from '@/components/ErrorNote'
+import { Button } from '@/components/ui/button'
+import { calendarAge } from '@/lib/age'
+import { db } from '@/lib/firebase'
+import { removeStudent, respondToStudent } from '@/lib/linkApi'
+
+interface StudentRow {
+  uid: string
+  name: string
+  instrument?: string
+  age: number | null
+  linkStatus: 'pending' | 'approved'
+}
+
+type Action = { uid: string; kind: 'approve' | 'reject' | 'remove' }
+
+const MAX_STUDENTS = 100
+
+// The teacher's students: new requests first, then the confirmed ones.
+export function StudentsList() {
+  const { state } = useAuth()
+  const [rows, setRows] = useState<StudentRow[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<Action | null>(null)
+  const [busy, setBusy] = useState(false)
+  const teacherUid = state.status === 'ready' ? state.user.uid : null
+
+  const load = useCallback(async () => {
+    if (!teacherUid) return
+    setError(null)
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'users'), where('teacherId', '==', teacherUid), limit(MAX_STUDENTS)),
+      )
+      setRows(
+        snap.docs.map((d) => {
+          const p = d.data() as Profile
+          return {
+            uid: d.id,
+            name: p.name,
+            instrument: p.instrument,
+            age: p.birthDate ? calendarAge(p.birthDate.toDate()) : null,
+            linkStatus: p.linkStatus ?? 'pending',
+          }
+        }),
+      )
+    } catch {
+      setError('לא הצלחנו לטעון את התלמידים. אפשר לנסות שוב.')
+    }
+  }, [teacherUid])
+
+  useEffect(() => {
+    void load()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [load])
+
+  async function run(action: Action) {
+    setBusy(true)
+    setError(null)
+    try {
+      if (action.kind === 'remove') await removeStudent(action.uid)
+      else await respondToStudent(action.uid, action.kind)
+      setConfirming(null)
+      await load()
+    } catch {
+      setError('הפעולה לא הצליחה. אפשר לרענן ולנסות שוב.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const pending = rows?.filter((r) => r.linkStatus === 'pending') ?? []
+  const approved = rows?.filter((r) => r.linkStatus === 'approved') ?? []
+
+  const question = (row: StudentRow, kind: Action['kind']) =>
+    kind === 'approve'
+      ? `לאשר את ${row.name}?`
+      : kind === 'reject'
+        ? `לדחות את הבקשה של ${row.name}?`
+        : `להסיר את ${row.name}? לא תהיה לך יותר גישה למידע שלהם. ההקלטות והמטלות נשארות אצלם.`
+
+  const details = (row: StudentRow) =>
+    [row.age !== null ? `גיל ${row.age} (הצהרה עצמית)` : null, row.instrument].filter(Boolean).join(' · ')
+
+  function Confirm({ row, kind }: { row: StudentRow; kind: Action['kind'] }) {
+    return (
+      <div className="flex flex-col gap-2 rounded-2xl bg-peach p-3">
+        <p>{question(row, kind)}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Button disabled={busy} onClick={() => void run({ uid: row.uid, kind })}>
+            כן
+          </Button>
+          <Button variant="outline" disabled={busy} onClick={() => setConfirming(null)}>
+            ביטול
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <ErrorNote message={error} />
+
+      <section aria-labelledby="requests-title" className="flex flex-col gap-3">
+        <h2 id="requests-title" className="text-xl font-bold">
+          בקשות הצטרפות ({pending.length})
+        </h2>
+        {rows !== null && pending.length === 0 && <p className="text-ink/60">אין בקשות חדשות.</p>}
+        {pending.map((row) => (
+          <article key={row.uid} className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm">
+            <div>
+              <p className="text-lg font-bold">{row.name}</p>
+              <p className="text-ink/70">{details(row)}</p>
+            </div>
+            {confirming?.uid === row.uid && confirming.kind !== 'remove' ? (
+              <Confirm row={row} kind={confirming.kind} />
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Button onClick={() => setConfirming({ uid: row.uid, kind: 'approve' })}>אישור</Button>
+                <Button variant="outline" onClick={() => setConfirming({ uid: row.uid, kind: 'reject' })}>
+                  דחייה
+                </Button>
+              </div>
+            )}
+          </article>
+        ))}
+      </section>
+
+      <section aria-labelledby="students-title" className="flex flex-col gap-3">
+        <h2 id="students-title" className="text-xl font-bold">
+          התלמידים שלי ({approved.length})
+        </h2>
+        {rows !== null && approved.length === 0 && <p className="text-ink/60">עדיין אין תלמידים.</p>}
+        {approved.map((row) => (
+          <article key={row.uid} className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm">
+            <div>
+              <p className="text-lg font-bold">{row.name}</p>
+              <p className="text-ink/70">{details(row)}</p>
+            </div>
+            {confirming?.uid === row.uid && confirming.kind === 'remove' ? (
+              <Confirm row={row} kind="remove" />
+            ) : (
+              <button
+                type="button"
+                className="self-start text-sm underline"
+                onClick={() => setConfirming({ uid: row.uid, kind: 'remove' })}
+              >
+                הסרה
+              </button>
+            )}
+          </article>
+        ))}
+      </section>
+    </div>
+  )
+}

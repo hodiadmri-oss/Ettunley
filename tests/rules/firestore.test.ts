@@ -954,6 +954,12 @@ describe('everything else is closed', () => {
     await assertFails(setDoc(doc(as(ids.teacherA), 'secrets/x'), { a: 1 }))
   })
 
+  it('the attempt counters of the invite-code lock are closed to every client', async () => {
+    await assertFails(getDoc(doc(as(ids.adultA), 'rateLimits/uid_adultA')))
+    await assertFails(setDoc(doc(as(ids.adultA), 'rateLimits/uid_adultA'), { count: 0, windowStart: 0 }))
+    await assertFails(getDoc(doc(as(ids.admin, { admin: true, email_verified: true }), 'rateLimits/uid_adultA')))
+  })
+
   it('anonymous users cannot read or write anything', async () => {
     await assertFails(getDoc(doc(anonymous(), 'assignments/a1')))
     await assertFails(getDoc(doc(anonymous(), 'templates/t1')))

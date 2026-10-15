@@ -113,8 +113,8 @@ try {
   await shot(page, '15-onboarding-adult-consent')
   await page.check('input[type=checkbox]')
   await page.click('button:has-text("סיום")')
-  await page.waitForSelector('text=שלום, נועה כהן')
-  check('student lands on the home screen', page.url().endsWith('/home'))
+  await page.waitForSelector('text=הצטרפות למורה')
+  check('a student without a teacher is asked for the code', page.url().endsWith('/home'))
   await shot(page, '5-home-student')
   const adult = await profileOf(noaUid)
   check('adult consent is stored as self with a time', adult.consentBy === 'self' && Boolean(adult.consentAt), JSON.stringify(adult))
@@ -132,10 +132,10 @@ try {
   await shot(page, '6-login-error')
   await page.fill('#password', 'correct-horse-9')
   await page.click('button[type=submit]')
-  await page.waitForSelector('text=שלום, נועה כהן')
+  await page.waitForSelector('text=הצטרפות למורה')
   check('signing in again works', true)
   await page.reload()
-  await page.waitForSelector('text=שלום, נועה כהן')
+  await page.waitForSelector('text=הצטרפות למורה')
   check('stays signed in after a reload', true)
 
   // ---------- the same e-mail cannot sign up twice ----------
@@ -186,7 +186,7 @@ try {
   check('the old password no longer works', true)
   await page2.fill('#password', 'brand-new-pass-7')
   await page2.click('button[type=submit]')
-  await page2.waitForSelector('text=שלום, נועה כהן')
+  await page2.waitForSelector('text=הצטרפות למורה')
   check('the new password works', true)
 
   // ---------- teacher with Google ----------
@@ -243,7 +243,7 @@ try {
   check('and no consent checkbox', (await page.locator('input[type=checkbox]').count()) === 0)
   await shot(page, '16-onboarding-minor')
   await page.click('button:has-text("סיום")')
-  await page.waitForSelector('text=שלום, יעל')
+  await page.waitForSelector('text=הצטרפות למורה')
   const yael = await profileOf(await uidOf('yael.new@example.com'))
   check('a minor is stored as isMinor=true WITHOUT any consent', yael.role === 'student' && yael.isMinor === true && !('consentAt' in yael), JSON.stringify(yael))
 
@@ -324,6 +324,71 @@ try {
     await danaPage.waitForSelector('text=שלום, דנה המורה')
     return danaPage.url().endsWith('/home') && (await danaPage.locator('text=ניהול').count()) === 0
   })())
+
+
+  // ---------- a student joins a teacher with the code ----------
+  const noaPage = await newPage()
+  await noaPage.goto(`${BASE}/login`)
+  await noaPage.fill('#email', 'noa@example.com')
+  await noaPage.fill('#password', 'brand-new-pass-7')
+  await noaPage.click('button[type=submit]')
+  await noaPage.waitForSelector('text=הצטרפות למורה')
+  await shot(noaPage, '21-join-teacher')
+  check('the Join button waits for a full code', await noaPage.locator('button:has-text("הצטרפות")').isDisabled())
+
+  await noaPage.fill('#code', 'zzzzzz')
+  await noaPage.click('button:has-text("הצטרפות")')
+  await noaPage.waitForSelector('[role=alert]')
+  check('a wrong code shows a gentle Hebrew error', (await noaPage.locator('[role=alert]').innerText()).includes('הקוד לא נכון'))
+  await shot(noaPage, '22-join-wrong-code')
+
+  const danaCode = (await profileOf(danaUid)).inviteCode
+  await noaPage.fill('#code', danaCode.toLowerCase())
+  check('typing is shown in capitals', (await noaPage.inputValue('#code')) === danaCode)
+  await noaPage.click('button:has-text("הצטרפות")')
+  await noaPage.waitForSelector('text=ממתינים לאישור המורה')
+  check('the student now waits, and the teacher name is shown', (await noaPage.locator('main').innerText()).includes('דנה המורה'))
+  await shot(noaPage, '23-student-waiting')
+  const waiting = await profileOf(noaUid)
+  check('the link is stored as pending', waiting.linkStatus === 'pending' && waiting.teacherName === 'דנה המורה', JSON.stringify(waiting))
+
+  await danaPage.goto(`${BASE}/home`)
+  await danaPage.waitForSelector('text=בקשות הצטרפות (1)')
+  const request = await danaPage.locator('article:has-text("נועה כהן")').innerText()
+  check('the teacher sees name, self-declared age and instrument', request.includes('גיל 3') && request.includes('הצהרה עצמית') && request.includes('פסנתר'), request)
+  await shot(danaPage, '24-teacher-requests')
+  await danaPage.click('article:has-text("נועה כהן") button:has-text("אישור")')
+  await danaPage.waitForSelector('text=לאשר את נועה כהן?')
+  await danaPage.click('button:has-text("כן")')
+  await danaPage.waitForSelector('text=התלמידים שלי (1)')
+  check('after approval she is among the teacher students', (await profileOf(noaUid)).linkStatus === 'approved')
+
+  await noaPage.click('text=בדיקה מחדש')
+  await noaPage.waitForSelector('text=המורה שלך: דנה המורה')
+  check('the student sees she was approved', true)
+  await shot(noaPage, '25-student-approved')
+
+  // invite code: copy-friendly display, renewing it
+  await danaPage.reload()
+  await danaPage.waitForSelector('[data-testid=invite-code]')
+  check('the teacher sees her code on screen', (await danaPage.locator('[data-testid=invite-code]').innerText()) === danaCode)
+  await shot(danaPage, '26-teacher-home')
+  await danaPage.click('text=הקוד דלף? יצירת קוד חדש')
+  await danaPage.click('button:has-text("כן, קוד חדש")')
+  await danaPage.waitForFunction((old) => document.querySelector('[data-testid=invite-code]')?.textContent !== old, danaCode)
+  const newCode = (await profileOf(danaUid)).inviteCode
+  check('the code changed and the screen shows the new one', newCode !== danaCode && (await danaPage.locator('[data-testid=invite-code]').innerText()) === newCode)
+
+  // removing the student
+  await danaPage.click('article:has-text("נועה כהן") >> text=הסרה')
+  await danaPage.waitForSelector('text=להסיר את נועה כהן?')
+  await danaPage.click('button:has-text("כן")')
+  await danaPage.waitForSelector('text=התלמידים שלי (0)')
+  const removed = await profileOf(noaUid)
+  check('removal clears the link but keeps the student profile', !('teacherId' in removed) && !('linkStatus' in removed) && removed.instrument === 'פסנתר', JSON.stringify(removed))
+  await noaPage.reload()
+  await noaPage.waitForSelector('text=הצטרפות למורה')
+  check('the removed student is asked for a code again', true)
 
 } finally {
   await browser.close()

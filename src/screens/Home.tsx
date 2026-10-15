@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { giveCopyrightStatement } from '@/auth/profile'
 import { ErrorNote } from '@/components/ErrorNote'
+import { InviteCodeCard } from '@/components/InviteCodeCard'
 import { Screen } from '@/components/Screen'
+import { StudentsList } from '@/components/StudentsList'
 import { Button } from '@/components/ui/button'
+import { EnterCode, WaitingForTeacher } from '@/screens/JoinTeacher'
 
 const COPYRIGHT_STATEMENT = 'אני מצהיר/ת שיש לי זכות להשתמש בחומרים שאעלה, ואני אחראי/ת לתוכן שלהם'
 
@@ -74,15 +77,27 @@ export default function Home() {
   if (state.status !== 'ready') return null
   const { profile, isAdmin } = state
 
+  // A student without a confirmed teacher cannot do anything else yet.
+  if (profile.role === 'student') {
+    if (!profile.teacherId) return <EnterCode />
+    if (profile.linkStatus !== 'approved') return <WaitingForTeacher teacherName={profile.teacherName ?? ''} />
+  }
+
   const pendingTeacher = profile.role === 'teacher' && profile.teacherStatus !== 'approved'
 
   return (
     <Screen title={`שלום, ${profile.name}`}>
       {pendingTeacher ? (
         <PendingTeacher />
+      ) : profile.role === 'teacher' ? (
+        <>
+          <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">ברוכה הבאה, מורה!</p>
+          {profile.inviteCode && <InviteCodeCard code={profile.inviteCode} />}
+          <StudentsList />
+        </>
       ) : (
         <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">
-          {profile.role === 'teacher' ? 'ברוכה הבאה, מורה!' : 'ברוכים הבאים! החשבון נוצר.'}
+          ברוכים הבאים! המורה שלך: {profile.teacherName}
         </p>
       )}
       {isAdmin && (

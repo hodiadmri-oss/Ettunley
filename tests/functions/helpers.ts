@@ -105,3 +105,9 @@ export async function readDoc(env: RulesTestEnvironment, path: string) {
   })
   return data
 }
+
+export async function putDoc(env: RulesTestEnvironment, path: string, data: Record<string, unknown>) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), path), data)
+  })
+}
