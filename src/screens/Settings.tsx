@@ -115,7 +115,7 @@ export default function Settings() {
       </section>
 
       <Button asChild variant="outline">
-        <Link to="/home">חזרה</Link>
+        <Link to="/">חזרה</Link>
       </Button>
     </Screen>
   )

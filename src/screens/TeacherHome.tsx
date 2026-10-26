@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { giveCopyrightStatement } from '@/auth/profile'
 import { ErrorNote } from '@/components/ErrorNote'
+import { HomeFooter } from '@/components/HomeFooter'
 import { InviteCodeCard } from '@/components/InviteCodeCard'
 import { Screen } from '@/components/Screen'
 import { StudentsList } from '@/components/StudentsList'
 import { Button } from '@/components/ui/button'
-import { EnterCode, WaitingForTeacher } from '@/screens/JoinTeacher'
 
 const COPYRIGHT_STATEMENT = 'אני מצהיר/ת שיש לי זכות להשתמש בחומרים שאעלה, ואני אחראי/ת לתוכן שלהם'
 
@@ -71,75 +70,26 @@ function PendingTeacher() {
   )
 }
 
-// A confirmed student. Minors see whether the parent has approved recording yet.
-function StudentHome() {
-  const { state, reloadProfile } = useAuth()
-
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void reloadProfile()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [reloadProfile])
-
+// The teacher's home: name, invite code with copy and share, and the students.
+// (The assignments and the rest of the teacher's tools arrive in the next phases.)
+export default function TeacherHome() {
+  const { state } = useAuth()
   if (state.status !== 'ready') return null
   const { profile } = state
-  return (
-    <>
-      <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">
-        ברוכים הבאים! המורה שלך: {profile.teacherName}
-      </p>
-      {profile.isMinor && !profile.consentAt && (
-        <p className="rounded-2xl bg-sky px-4 py-4 text-center text-base">
-          ההקלטות ייפתחו אחרי שההורה יאשר במייל
-        </p>
-      )}
-      {profile.isMinor && profile.consentAt && (
-        <p className="rounded-2xl bg-sky px-4 py-4 text-center text-base">✓ ההורה אישר. אפשר להקליט</p>
-      )}
-    </>
-  )
-}
-
-// Placeholder until the real home screens exist (phase 1, step 9).
-export default function Home() {
-  const { state, signOut } = useAuth()
-  if (state.status !== 'ready') return null
-  const { profile, isAdmin } = state
-
-  // A student without a confirmed teacher cannot do anything else yet.
-  if (profile.role === 'student') {
-    if (!profile.teacherId) return <EnterCode />
-    if (profile.linkStatus !== 'approved') return <WaitingForTeacher teacherName={profile.teacherName ?? ''} />
-  }
-
-  const pendingTeacher = profile.role === 'teacher' && profile.teacherStatus !== 'approved'
+  const pending = profile.teacherStatus !== 'approved'
 
   return (
     <Screen title={`שלום, ${profile.name}`}>
-      {pendingTeacher ? (
+      {pending ? (
         <PendingTeacher />
-      ) : profile.role === 'teacher' ? (
+      ) : (
         <>
           <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">ברוכה הבאה, מורה!</p>
           {profile.inviteCode && <InviteCodeCard code={profile.inviteCode} />}
           <StudentsList />
         </>
-      ) : (
-        <StudentHome />
       )}
-      {isAdmin && (
-        <Button asChild variant="soft">
-          <Link to="/admin">ניהול</Link>
-        </Button>
-      )}
-      <Button asChild variant="soft">
-        <Link to="/settings">הגדרות ופרטיות</Link>
-      </Button>
-      <Button variant="outline" onClick={() => void signOut()}>
-        יציאה
-      </Button>
+      <HomeFooter />
     </Screen>
   )
 }

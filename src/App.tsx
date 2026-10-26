@@ -2,17 +2,19 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useState } from 'react'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { isOnboardingComplete } from '@/auth/profile'
+import { homePath } from '@/lib/homePath'
 import Admin from '@/screens/Admin'
 import ConsentApprove from '@/screens/ConsentApprove'
 import ConsentManage from '@/screens/ConsentManage'
 import ChooseRole from '@/screens/ChooseRole'
-import Home from '@/screens/Home'
 import Onboarding from '@/screens/Onboarding'
 import Privacy from '@/screens/Privacy'
 import ResetPassword from '@/screens/ResetPassword'
 import Settings from '@/screens/Settings'
 import SignIn from '@/screens/SignIn'
 import SignUp from '@/screens/SignUp'
+import StudentHome from '@/screens/StudentHome'
+import TeacherHome from '@/screens/TeacherHome'
 import Welcome from '@/screens/Welcome'
 
 function Loading() {
@@ -71,12 +73,15 @@ function Router() {
     return <Onboarding onDone={() => setOnboarding({ uid, active: false })} />
   }
 
+  // Each role has its own home; anything else (including "/" and "/home") goes there.
+  const home = homePath(state.profile.role)
   return (
     <Routes>
-      <Route path="/home" element={<Home />} />
+      <Route path="/student" element={state.profile.role === 'student' ? <StudentHome /> : <Navigate to={home} replace />} />
+      <Route path="/teacher" element={state.profile.role === 'teacher' ? <TeacherHome /> : <Navigate to={home} replace />} />
       <Route path="/settings" element={<Settings />} />
       {state.isAdmin && <Route path="/admin" element={<Admin />} />}
-      <Route path="*" element={<Navigate to="/home" replace />} />
+      <Route path="*" element={<Navigate to={home} replace />} />
     </Routes>
   )
 }

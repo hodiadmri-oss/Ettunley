@@ -114,7 +114,7 @@ try {
   await page.check('input[type=checkbox]')
   await page.click('button:has-text("סיום")')
   await page.waitForSelector('text=הצטרפות למורה')
-  check('a student without a teacher is asked for the code', page.url().endsWith('/home'))
+  check('a student lands on /student (and is asked for the teacher code)', page.url().endsWith('/student'))
   await shot(page, '5-home-student')
   const adult = await profileOf(noaUid)
   check('adult consent is stored as self with a time', adult.consentBy === 'self' && Boolean(adult.consentAt), JSON.stringify(adult))
@@ -322,7 +322,7 @@ try {
   check('an ordinary teacher gets no admin link and /admin sends her home', await (async () => {
     await danaPage.goto(`${BASE}/admin`)
     await danaPage.waitForSelector('text=שלום, דנה המורה')
-    return danaPage.url().endsWith('/home') && (await danaPage.locator('text=ניהול').count()) === 0
+    return danaPage.url().endsWith('/teacher') && (await danaPage.locator('text=ניהול').count()) === 0
   })())
 
 
@@ -352,7 +352,7 @@ try {
   const waiting = await profileOf(noaUid)
   check('the link is stored as pending', waiting.linkStatus === 'pending' && waiting.teacherName === 'דנה המורה', JSON.stringify(waiting))
 
-  await danaPage.goto(`${BASE}/home`)
+  await danaPage.goto(`${BASE}/teacher`)
   await danaPage.waitForSelector('text=בקשות הצטרפות (1)')
   const request = await danaPage.locator('article:has-text("נועה כהן")').innerText()
   check('the teacher sees name, self-declared age and instrument', request.includes('גיל 3') && request.includes('הצהרה עצמית') && request.includes('פסנתר'), request)
@@ -366,6 +366,16 @@ try {
   await noaPage.click('text=בדיקה מחדש')
   await noaPage.waitForSelector('text=המורה שלך: דנה המורה')
   check('the student sees she was approved', true)
+  await noaPage.goto(`${BASE}/teacher`)
+  await noaPage.waitForSelector('text=המורה שלך: דנה המורה')
+  check('a student who opens /teacher is sent back to /student', noaPage.url().endsWith('/student'))
+  await danaPage.goto(`${BASE}/student`)
+  await danaPage.waitForSelector('text=ברוכה הבאה, מורה!')
+  check('a teacher who opens /student is sent back to /teacher', danaPage.url().endsWith('/teacher'))
+  await danaPage.goto(`${BASE}/home`)
+  await danaPage.waitForSelector('text=ברוכה הבאה, מורה!')
+  check('the old /home and the bare address lead to the role home', danaPage.url().endsWith('/teacher'))
+  await shot(noaPage, '37-student-home')
   await shot(noaPage, '25-student-approved')
 
   // invite code: copy-friendly display, renewing it
@@ -415,7 +425,7 @@ try {
   await yaelPage.click('button:has-text("הצטרפות")')
   await yaelPage.waitForSelector('text=ממתינים לאישור המורה')
 
-  await danaPage.goto(`${BASE}/home`)
+  await danaPage.goto(`${BASE}/teacher`)
   await danaPage.waitForSelector('article:has-text("יעל") button:has-text("אישור")')
   await danaPage.click('article:has-text("יעל") button:has-text("אישור")')
   await danaPage.click('button:has-text("כן")')

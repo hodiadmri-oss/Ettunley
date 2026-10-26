@@ -223,7 +223,7 @@ export default function Admin() {
       <footer className="flex flex-col gap-3">
         {hasProfile && (
           <Button asChild variant="soft">
-            <Link to="/home">חזרה למסך הבית</Link>
+            <Link to="/">חזרה למסך הבית</Link>
           </Button>
         )}
         <Button variant="outline" onClick={() => void signOut()}>
