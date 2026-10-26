@@ -10,7 +10,7 @@
 #   5. finds (or creates) the web app and reads its public key
 #   6. stores a placeholder for the e-mail key (no real e-mails are sent yet)
 #   7. builds everything
-#   8. publishes rules, functions and the website
+#   8. publishes rules and the website, then the functions in small groups
 # Nothing here ever reads or prints a password. The public web key it handles is not secret.
 set -euo pipefail
 
@@ -73,7 +73,27 @@ say "7/7 Building and publishing"
 npm run build
 npm --prefix functions run build
 echo "If it asks to give Storage permission to read Firestore, answer Y (the file rules need it)."
-$FB deploy --project "$PROJECT" --only firestore,storage,functions,hosting
+# Rules and website first, then the functions in small groups: Google limits how many
+# functions can be created per minute, and a big single deploy often fails half-way.
+$FB deploy --project "$PROJECT" --only firestore,storage,hosting
+
+FUNCTION_GROUPS=(
+  "approveTeacher,listTeachers,rejectTeacher,joinTeacher"
+  "respondToStudent,removeStudent,regenerateInviteCode,cancelJoinRequest"
+  "sendParentConsent,getParentConsentInfo,approveParentConsent,getParentManageInfo"
+  "manageParentConsent,deleteMyAccount,adminLookupUser,adminDeleteUser"
+  "dailyRetention"
+)
+for group in "${FUNCTION_GROUPS[@]}"; do
+  only="$(printf 'functions:%s,' ${group//,/ })"
+  only="${only%,}"
+  say "Functions: $group"
+  for attempt in 1 2 3; do
+    if $FB deploy --project "$PROJECT" --only "$only"; then break; fi
+    [ "$attempt" = 3 ] && echo "WARNING: this group did not finish. Run the script again; finished groups are quick."
+    sleep 30
+  done
+done
 
 say "Done"
 echo "Open:  https://$PROJECT.web.app"
