@@ -71,6 +71,24 @@ describe('listTeachers', () => {
     expect(byUid.has(rejected.uid)).toBe(false)
     expect(byUid.has(student.uid)).toBe(false)
   })
+
+  it('counts only confirmed students of each teacher', async () => {
+    const teacher = await newTeacher({ status: 'approved' })
+    const other = await newTeacher({ status: 'approved' })
+    const link = async (teacherId: string, linkStatus: string) => {
+      const s = await createUser({ provider: 'password' })
+      await putUserDoc(env, s.uid, { role: 'student', teacherId, linkStatus })
+    }
+    await link(teacher.uid, 'approved')
+    await link(teacher.uid, 'approved')
+    await link(teacher.uid, 'pending')
+    await link(other.uid, 'approved')
+
+    const { teachers } = (await callAs(admin, 'listTeachers')) as { teachers: { uid: string; studentCount: number }[] }
+    const byUid = new Map(teachers.map((t) => [t.uid, t.studentCount]))
+    expect(byUid.get(teacher.uid)).toBe(2)
+    expect(byUid.get(other.uid)).toBe(1)
+  })
 })
 
 describe('approveTeacher', () => {

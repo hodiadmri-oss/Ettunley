@@ -212,6 +212,7 @@ export default function Admin() {
               <article key={t.uid} className="rounded-3xl bg-white p-4 shadow-sm">
                 <p className="text-lg font-bold">{t.name}</p>
                 <p dir="ltr" className="text-start text-ink/70">{t.email}</p>
+                <p className="text-sm text-ink/70">תלמידים מחוברים: {t.studentCount}</p>
               </article>
             ))}
           </section>

@@ -29,10 +29,25 @@ export const listTeachers = onCall(async (request) => {
     for (const u of batch.users) emails.set(u.uid, { email: u.email ?? '', verified: u.emailVerified })
   }
 
-  const teachers = snap.docs.map((d) => {
+  // Only confirmed students are counted (one small count query per teacher).
+  const studentCounts = await Promise.all(
+    snap.docs.map(async (d) => {
+      if (d.data().teacherStatus !== 'approved') return 0
+      const count = await getFirestore()
+        .collection('users')
+        .where('teacherId', '==', d.id)
+        .where('linkStatus', '==', 'approved')
+        .count()
+        .get()
+      return count.data().count
+    }),
+  )
+
+  const teachers = snap.docs.map((d, i) => {
     const data = d.data()
     const account = emails.get(d.id)
     return {
+      studentCount: studentCounts[i],
       uid: d.id,
       name: String(data.name ?? ''),
       email: account?.email ?? '',

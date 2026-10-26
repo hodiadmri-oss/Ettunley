@@ -7,6 +7,7 @@ export interface TeacherRow {
   email: string
   emailVerified: boolean
   status: 'pending' | 'approved'
+  studentCount: number
   createdAt: number | null
   copyrightStatementAt: number | null
 }
