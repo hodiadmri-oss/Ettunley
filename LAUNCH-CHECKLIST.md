@@ -12,6 +12,7 @@ whenever you talk about inviting more teachers. Tick items as you finish them.
 - [ ] **Deployment extras for deletion** (Claude does them with you in the go-live step): the daily clean-up that deletes recordings after 12 months needs Google's scheduler switched on, and the database index file `firestore.indexes.json` deployed. Check once after launch that an old test recording really disappears.
 - [ ] **Parent e-mails go out for real** (Claude walks you through it, step by step): an account with the e-mail service (Resend), a sending address, and the API key stored as a Functions secret. Until then nothing is sent: in the emulator the e-mail is only stored. Also set the two production settings `APP_URL` (the app's web address, used in the link) and `EMAIL_FROM`.
 - [ ] **The privacy contact address** appears in two places in the code: `PRIVACY_CONTACT_EMAIL` in `src/lib/strings.ts` and the `PRIVACY_CONTACT_EMAIL` setting of the Functions. Until a real address is set, the contact sentence is left out of the parent e-mail and page.
+- [ ] The trial version is online (`docs/DEPLOY-TRIAL.md`) and you tried it on your own phone.
 - [ ] You made yourself the admin, following `docs/ADMIN-SETUP.md` (the first time on the real project; Claude walks you through it).
 - [ ] You tested the whole flow yourself with one real teacher and one student (a minor and an adult).
 - [ ] You know who answers privacy requests (you) and where they arrive (see next section).

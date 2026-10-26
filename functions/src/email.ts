@@ -25,7 +25,10 @@ export async function sendEmail(message: EmailMessage): Promise<void> {
   }
 
   const apiKey = resendApiKey.value()
-  if (!apiKey) throw new HttpsError('failed-precondition', 'שליחת מיילים עוד לא הוגדרה.')
+  // "not-set-yet" is the placeholder the deploy script stores until a real key exists.
+  if (!apiKey || apiKey === 'not-set-yet') {
+    throw new HttpsError('failed-precondition', 'שליחת מיילים עוד לא הוגדרה.')
+  }
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
