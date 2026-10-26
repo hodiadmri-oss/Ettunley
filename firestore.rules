@@ -243,10 +243,13 @@ service cloud.firestore {
 
       function validItemContent(d) {
         return d.keys().hasOnly(
-               ['position', 'title', 'sheetPath', 'accompanimentPath', 'youtubeUrl',
+               ['position', 'title', 'notes', 'sheetPath', 'accompanimentPath', 'youtubeUrl',
                 'metronomeBpm', 'status', 'statusUpdatedAt', 'recording'])
           && d.position is int
+          && d.position >= 0
+          && d.position < 10
           && validShortText(d.title, 100)
+          && (!('notes' in d) || (d.notes is string && d.notes.size() <= 1000))
           && (!('sheetPath' in d) || validTeacherFilePath(d.sheetPath))
           && (!('accompanimentPath' in d) || validTeacherFilePath(d.accompanimentPath))
           && (!('youtubeUrl' in d) || validYoutubeUrl(d.youtubeUrl))
@@ -282,7 +285,7 @@ service cloud.firestore {
 
         allow create: if isTeacherOf(assignmentDoc(aid))
           && request.resource.data.keys().hasOnly(
-               ['position', 'title', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm', 'status'])
+               ['position', 'title', 'notes', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm', 'status'])
           && request.resource.data.status == 'working'
           && validItemContent(request.resource.data);
 
@@ -290,7 +293,7 @@ service cloud.firestore {
           // Teacher: content only (never the student's status or recording).
           if (isTeacherOf(assignmentDoc(aid))
               && request.resource.data.diff(resource.data).affectedKeys()
-                   .hasOnly(['position', 'title', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm'])
+                   .hasOnly(['position', 'title', 'notes', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm'])
               && validItemContent(request.resource.data))
           // Student: status and recording only.
           || (isStudentOf(assignmentDoc(aid))
@@ -393,9 +396,12 @@ service cloud.firestore {
       match /items/{itemId} {
         function validTemplateItem(d) {
           return d.keys().hasOnly(
-                 ['position', 'title', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm'])
+                 ['position', 'title', 'notes', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm'])
             && d.position is int
+          && d.position >= 0
+          && d.position < 10
             && validShortText(d.title, 100)
+            && (!('notes' in d) || (d.notes is string && d.notes.size() <= 1000))
             && (!('sheetPath' in d) || validTeacherFilePath(d.sheetPath))
             && (!('accompanimentPath' in d) || validTeacherFilePath(d.accompanimentPath))
             && (!('youtubeUrl' in d) || validYoutubeUrl(d.youtubeUrl))

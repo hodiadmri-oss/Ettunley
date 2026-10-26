@@ -41,7 +41,7 @@ Don't build assignments, timer, recordings or the dashboard yet. Stop, tell me w
 
 Read CLAUDE.md. The teacher creates an assignment for a student from the phone: title, description, daily goal in minutes, and several items (sheet music image/PDF, accompaniment mp3, YouTube link, metronome BPM — all optional). The teacher can save an assignment as a template and create a new assignment from a template, for any of their students.
 
-Every upload of sheet music or backing tracks shows the copyright statement checkbox from CLAUDE.md; the owner can remove files from `/admin`.
+The copyright statement is given once, at approval (owner decision), not at every upload; the owner can remove files from `/admin`. Each practice item also has a free-text "notes" field (the teacher's tips for the student).
 
 The student sees all their assignments chronologically, newest first, grouped by week, and can open each one and its items.
 

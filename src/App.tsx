@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { isOnboardingComplete } from '@/auth/profile'
 import { homePath } from '@/lib/homePath'
 import Admin from '@/screens/Admin'
+import AssignmentEditor from '@/screens/AssignmentEditor'
 import ConsentApprove from '@/screens/ConsentApprove'
 import ConsentManage from '@/screens/ConsentManage'
 import ChooseRole from '@/screens/ChooseRole'
@@ -13,8 +14,10 @@ import ResetPassword from '@/screens/ResetPassword'
 import Settings from '@/screens/Settings'
 import SignIn from '@/screens/SignIn'
 import SignUp from '@/screens/SignUp'
+import StudentAssignment from '@/screens/StudentAssignment'
 import StudentHome from '@/screens/StudentHome'
 import TeacherHome from '@/screens/TeacherHome'
+import TeacherStudent from '@/screens/TeacherStudent'
 import Welcome from '@/screens/Welcome'
 
 function Loading() {
@@ -79,6 +82,16 @@ function Router() {
     <Routes>
       <Route path="/student" element={state.profile.role === 'student' ? <StudentHome /> : <Navigate to={home} replace />} />
       <Route path="/teacher" element={state.profile.role === 'teacher' ? <TeacherHome /> : <Navigate to={home} replace />} />
+      {state.profile.role === 'student' && state.profile.linkStatus === 'approved' && (
+        <Route path="/student/assignment/:assignmentId" element={<StudentAssignment />} />
+      )}
+      {state.profile.role === 'teacher' && (
+        <>
+          <Route path="/teacher/student/:studentId" element={<TeacherStudent />} />
+          <Route path="/teacher/student/:studentId/new-assignment" element={<AssignmentEditor />} />
+          <Route path="/teacher/student/:studentId/assignment/:assignmentId" element={<AssignmentEditor />} />
+        </>
+      )}
       <Route path="/settings" element={<Settings />} />
       {state.isAdmin && <Route path="/admin" element={<Admin />} />}
       <Route path="*" element={<Navigate to={home} replace />} />

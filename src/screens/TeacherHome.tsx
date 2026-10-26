@@ -70,8 +70,8 @@ function PendingTeacher() {
   )
 }
 
-// The teacher's home: name, invite code with copy and share, and the students.
-// (The assignments and the rest of the teacher's tools arrive in the next phases.)
+// The teacher's home: the students first (tap one to see their assignments), and the
+// invite code, which is needed only when a new student joins, in one small line.
 export default function TeacherHome() {
   const { state } = useAuth()
   if (state.status !== 'ready') return null
@@ -79,14 +79,13 @@ export default function TeacherHome() {
   const pending = profile.teacherStatus !== 'approved'
 
   return (
-    <Screen title={`שלום, ${profile.name}`}>
+    <Screen title={`שלום, ${profile.name}`} top>
       {pending ? (
         <PendingTeacher />
       ) : (
         <>
-          <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">ברוכה הבאה, מורה!</p>
-          {profile.inviteCode && <InviteCodeCard code={profile.inviteCode} />}
           <StudentsList />
+          {profile.inviteCode && <InviteCodeCard code={profile.inviteCode} />}
         </>
       )}
       <HomeFooter />

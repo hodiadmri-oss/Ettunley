@@ -45,24 +45,26 @@ export function InviteCodeCard({ code }: { code: string }) {
     }
   }
 
+  // One compact line: the code is used rarely (only when a new student joins).
   return (
-    <section aria-labelledby="code-title" className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm">
-      <h2 id="code-title" className="text-lg font-bold">
-        הקוד שלך
-      </h2>
-      <p dir="ltr" data-testid="invite-code" className="select-all text-center text-4xl font-bold tracking-widest">
-        {code}
-      </p>
-      <p className="text-center text-sm text-ink/60">תלמידים חדשים מקלידים אותו כדי להצטרף אלייך.</p>
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="soft" onClick={() => void copy()}>
-          {copied ? '✓ הועתק' : 'העתקה'}
-        </Button>
-        {typeof navigator.share === 'function' && (
-          <Button variant="soft" onClick={() => void share()}>
-            שיתוף
+    <section aria-labelledby="code-title" className="flex flex-col gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="code-title" className="text-base text-ink/70">
+          הקוד שלך להצטרפות
+        </h2>
+        <p dir="ltr" data-testid="invite-code" className="select-all text-xl font-bold tracking-widest">
+          {code}
+        </p>
+        <div className="flex gap-2">
+          <Button variant="soft" className="min-h-10 px-4 py-2 text-base" onClick={() => void copy()}>
+            {copied ? '✓ הועתק' : 'העתקה'}
           </Button>
-        )}
+          {typeof navigator.share === 'function' && (
+            <Button variant="soft" className="min-h-10 px-4 py-2 text-base" onClick={() => void share()}>
+              שיתוף
+            </Button>
+          )}
+        </div>
       </div>
       <ErrorNote message={error} />
       {confirming ? (
@@ -78,7 +80,7 @@ export function InviteCodeCard({ code }: { code: string }) {
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => setConfirming(true)} className="text-center text-sm underline">
+        <button type="button" onClick={() => setConfirming(true)} className="self-start text-sm text-ink/60 underline">
           הקוד דלף? יצירת קוד חדש
         </button>
       )}

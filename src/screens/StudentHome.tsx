@@ -2,12 +2,13 @@ import { useEffect } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { HomeFooter } from '@/components/HomeFooter'
 import { Screen } from '@/components/Screen'
+import { StudentAssignments } from '@/components/StudentAssignments'
 import { EnterCode, WaitingForTeacher } from '@/screens/JoinTeacher'
 
 // The student's home: name and teacher. A student without a confirmed teacher
 // cannot do anything else yet, so they see the code screen or the waiting screen.
 // Minors also see whether the parent has approved recording.
-// (The assignments and practice arrive in the next phases.)
+// Below: all the assignments. (Practice and recording arrive in the next phases.)
 export default function StudentHome() {
   const { state, reloadProfile } = useAuth()
 
@@ -26,10 +27,7 @@ export default function StudentHome() {
   if (profile.linkStatus !== 'approved') return <WaitingForTeacher teacherName={profile.teacherName ?? ''} />
 
   return (
-    <Screen title={`שלום, ${profile.name}`}>
-      <p className="rounded-2xl bg-sage px-4 py-4 text-center text-lg">
-        ברוכים הבאים! המורה שלך: {profile.teacherName}
-      </p>
+    <Screen title={`שלום, ${profile.name}`} subtitle={`המורה שלך: ${profile.teacherName}`} top>
       {profile.isMinor && !profile.consentAt && (
         <p className="rounded-2xl bg-sky px-4 py-4 text-center text-base">
           ההקלטות ייפתחו אחרי שההורה יאשר במייל
@@ -38,6 +36,7 @@ export default function StudentHome() {
       {profile.isMinor && profile.consentAt && (
         <p className="rounded-2xl bg-sky px-4 py-4 text-center text-base">✓ ההורה אישר. אפשר להקליט</p>
       )}
+      <StudentAssignments />
       <HomeFooter />
     </Screen>
   )

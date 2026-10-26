@@ -601,6 +601,24 @@ describe('assignment items', () => {
     )
   })
 
+  it("the teacher's practice tips (notes) are accepted, but not too long or not text", async () => {
+    await assertSucceeds(setDoc(doc(as(ids.teacherA), 'assignments/a1/items/i2'), { ...item, notes: 'לנגן לאט, עם מטרונום' }))
+    await assertFails(setDoc(doc(as(ids.teacherA), 'assignments/a1/items/i3'), { ...item, notes: 'א'.repeat(1001) }))
+    await assertFails(setDoc(doc(as(ids.teacherA), 'assignments/a1/items/i3'), { ...item, notes: 5 }))
+  })
+
+  it('a student can read the notes but cannot change them', async () => {
+    await assertSucceeds(setDoc(doc(as(ids.teacherA), 'assignments/a1/items/i2'), { ...item, notes: 'טיפ' }))
+    await assertSucceeds(getDoc(doc(as(ids.adultA), 'assignments/a1/items/i2')))
+    await assertFails(updateDoc(doc(as(ids.adultA), 'assignments/a1/items/i2'), { notes: 'שינוי' }))
+  })
+
+  it('an item position is limited to 10 items per assignment', async () => {
+    await assertSucceeds(setDoc(doc(as(ids.teacherA), 'assignments/a1/items/i9'), { ...item, position: 9 }))
+    await assertFails(setDoc(doc(as(ids.teacherA), 'assignments/a1/items/i10'), { ...item, position: 10 }))
+    await assertFails(setDoc(doc(as(ids.teacherA), 'assignments/a1/items/ineg'), { ...item, position: -1 }))
+  })
+
   it('a metronome outside a sensible range is rejected', async () => {
     await assertFails(setDoc(doc(as(ids.teacherA), 'assignments/a1/items/i2'), { ...item, metronomeBpm: 5000 }))
   })
@@ -917,7 +935,7 @@ describe('templates', () => {
     const db = as(ids.teacherA)
     await assertSucceeds(
       setDoc(doc(db, 'templates/t1/items/ti2'), {
-        position: 2, title: 'אטיוד', metronomeBpm: 90, sheetPath: 'sheet-music/teacherA/a.pdf',
+        position: 2, title: 'אטיוד', metronomeBpm: 90, sheetPath: 'sheet-music/teacherA/a.pdf', notes: 'לאט',
       }),
     )
     await assertSucceeds(getDoc(doc(db, 'templates/t1/items/ti1')))

@@ -1,13 +1,13 @@
 import { collection, getDocs, limit, query, where } from 'firebase/firestore'
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import type { Profile } from '@/auth/profile'
 import { ErrorNote } from '@/components/ErrorNote'
-import { ConsentRequest } from '@/components/ConsentRequest'
 import { Button } from '@/components/ui/button'
 import { calendarAge } from '@/lib/age'
 import { db } from '@/lib/firebase'
-import { removeStudent, respondToStudent } from '@/lib/linkApi'
+import { respondToStudent } from '@/lib/linkApi'
 
 interface StudentRow {
   uid: string
@@ -19,7 +19,7 @@ interface StudentRow {
   hasConsent: boolean
 }
 
-type Action = { uid: string; kind: 'approve' | 'reject' | 'remove' }
+type Action = { uid: string; kind: 'approve' | 'reject' }
 
 const MAX_STUDENTS = 100
 
@@ -71,8 +71,7 @@ export function StudentsList() {
     setBusy(true)
     setError(null)
     try {
-      if (action.kind === 'remove') await removeStudent(action.uid)
-      else await respondToStudent(action.uid, action.kind)
+      await respondToStudent(action.uid, action.kind)
       setConfirming(null)
       await load()
     } catch {
@@ -86,11 +85,7 @@ export function StudentsList() {
   const approved = rows?.filter((r) => r.linkStatus === 'approved') ?? []
 
   const question = (row: StudentRow, kind: Action['kind']) =>
-    kind === 'approve'
-      ? `לאשר את ${row.name}?`
-      : kind === 'reject'
-        ? `לדחות את הבקשה של ${row.name}?`
-        : `להסיר את ${row.name}? לא תהיה לך יותר גישה למידע שלהם. ההקלטות והמטלות נשארות אצלם.`
+    kind === 'approve' ? `לאשר את ${row.name}?` : `לדחות את הבקשה של ${row.name}?`
 
   const details = (row: StudentRow) =>
     [row.age !== null ? `גיל ${row.age} (הצהרה עצמית)` : null, row.instrument].filter(Boolean).join(' · ')
@@ -115,55 +110,53 @@ export function StudentsList() {
     <div className="flex flex-col gap-6">
       <ErrorNote message={error} />
 
-      <section aria-labelledby="requests-title" className="flex flex-col gap-3">
-        <h2 id="requests-title" className="text-xl font-bold">
-          בקשות הצטרפות ({pending.length})
-        </h2>
-        {rows !== null && pending.length === 0 && <p className="text-ink/60">אין בקשות חדשות.</p>}
-        {pending.map((row) => (
-          <article key={row.uid} className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm">
-            <div>
-              <p className="text-lg font-bold">{row.name}</p>
-              <p className="text-ink/70">{details(row)}</p>
-            </div>
-            {confirming?.uid === row.uid && confirming.kind !== 'remove' ? (
-              <Confirm row={row} kind={confirming.kind} />
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => setConfirming({ uid: row.uid, kind: 'approve' })}>אישור</Button>
-                <Button variant="outline" onClick={() => setConfirming({ uid: row.uid, kind: 'reject' })}>
-                  דחייה
-                </Button>
+      {pending.length > 0 && (
+        <section aria-labelledby="requests-title" className="flex flex-col gap-3">
+          <h2 id="requests-title" className="text-xl font-bold">
+            בקשות הצטרפות ({pending.length})
+          </h2>
+          {pending.map((row) => (
+            <article key={row.uid} className="flex flex-col gap-3 rounded-3xl bg-peach p-4">
+              <div>
+                <p className="text-lg font-bold">{row.name}</p>
+                <p className="text-ink/70">{details(row)}</p>
               </div>
-            )}
-          </article>
-        ))}
-      </section>
+              {confirming?.uid === row.uid ? (
+                <Confirm row={row} kind={confirming.kind} />
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button onClick={() => setConfirming({ uid: row.uid, kind: 'approve' })}>אישור</Button>
+                  <Button variant="outline" onClick={() => setConfirming({ uid: row.uid, kind: 'reject' })}>
+                    דחייה
+                  </Button>
+                </div>
+              )}
+            </article>
+          ))}
+        </section>
+      )}
 
       <section aria-labelledby="students-title" className="flex flex-col gap-3">
         <h2 id="students-title" className="text-xl font-bold">
           התלמידים שלי ({approved.length})
         </h2>
-        {rows !== null && approved.length === 0 && <p className="text-ink/60">עדיין אין תלמידים.</p>}
+        {rows !== null && approved.length === 0 && (
+          <p className="text-ink/60">עדיין אין תלמידים. אפשר לשלוח להם את הקוד שלמעלה.</p>
+        )}
         {approved.map((row) => (
-          <article key={row.uid} className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm">
-            <div>
-              <p className="text-lg font-bold">{row.name}</p>
-              <p className="text-ink/70">{details(row)}</p>
-            </div>
-            {row.isMinor && <ConsentRequest studentId={row.uid} hasConsent={row.hasConsent} onChanged={load} />}
-            {confirming?.uid === row.uid && confirming.kind === 'remove' ? (
-              <Confirm row={row} kind="remove" />
-            ) : (
-              <button
-                type="button"
-                className="self-start text-sm underline"
-                onClick={() => setConfirming({ uid: row.uid, kind: 'remove' })}
-              >
-                הסרה
-              </button>
+          <Link
+            key={row.uid}
+            to={`/teacher/student/${row.uid}`}
+            className="flex min-h-16 items-center justify-between gap-3 rounded-3xl bg-white px-4 py-3 shadow-sm"
+          >
+            <span className="flex flex-col">
+              <span className="text-lg font-bold">{row.name}</span>
+              <span className="text-sm text-ink/60">{[row.instrument, row.age !== null ? `גיל ${row.age}` : null].filter(Boolean).join(' · ')}</span>
+            </span>
+            {row.isMinor && !row.hasConsent && (
+              <span className="shrink-0 rounded-full bg-sky px-3 py-1 text-sm">ממתין לאישור הורה</span>
             )}
-          </article>
+          </Link>
         ))}
       </section>
     </div>

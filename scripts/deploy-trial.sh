@@ -11,10 +11,16 @@
 #   6. stores a placeholder for the e-mail key (no real e-mails are sent yet)
 #   7. builds everything
 #   8. publishes rules and the website, then the functions in small groups
+# Later updates:   bash scripts/deploy-trial.sh update
+#   (publishes rules, website and only the functions listed in UPDATE_FUNCTIONS below)
 # Nothing here ever reads or prints a password. The public web key it handles is not secret.
 set -euo pipefail
 
 PROJECT="ettunley-61749"
+BUCKET="$PROJECT.firebasestorage.app"
+# Functions that changed since the last published version (used by "update").
+UPDATE_FUNCTIONS="listTeachers"
+MODE="${1:-full}"
 cd "$(dirname "$0")/.."
 
 say() { printf '\n=== %s ===\n' "$*"; }
@@ -77,13 +83,17 @@ echo "If it asks to give Storage permission to read Firestore, answer Y (the fil
 # functions can be created per minute, and a big single deploy often fails half-way.
 $FB deploy --project "$PROJECT" --only firestore,storage,hosting
 
-FUNCTION_GROUPS=(
-  "approveTeacher,listTeachers,rejectTeacher,joinTeacher"
-  "respondToStudent,removeStudent,regenerateInviteCode,cancelJoinRequest"
-  "sendParentConsent,getParentConsentInfo,approveParentConsent,getParentManageInfo"
-  "manageParentConsent,deleteMyAccount,adminLookupUser,adminDeleteUser"
-  "dailyRetention"
-)
+if [ "$MODE" = "update" ]; then
+  FUNCTION_GROUPS=("$UPDATE_FUNCTIONS")
+else
+  FUNCTION_GROUPS=(
+    "approveTeacher,listTeachers,rejectTeacher,joinTeacher"
+    "respondToStudent,removeStudent,regenerateInviteCode,cancelJoinRequest"
+    "sendParentConsent,getParentConsentInfo,approveParentConsent,getParentManageInfo"
+    "manageParentConsent,deleteMyAccount,adminLookupUser,adminDeleteUser"
+    "dailyRetention"
+  )
+fi
 for group in "${FUNCTION_GROUPS[@]}"; do
   only="$(printf 'functions:%s,' ${group//,/ })"
   only="${only%,}"
@@ -94,6 +104,26 @@ for group in "${FUNCTION_GROUPS[@]}"; do
     sleep 30
   done
 done
+
+say "Letting the website call the functions (safe to repeat)"
+# The website must be allowed to *call* each function; each function still checks by itself
+# who is calling. Google sometimes skips this step when many functions are created at once.
+for f in approveteacher listteachers rejectteacher jointeacher respondtostudent removestudent \
+  regenerateinvitecode canceljoinrequest sendparentconsent getparentconsentinfo approveparentconsent \
+  getparentmanageinfo manageparentconsent deletemyaccount adminlookupuser admindeleteuser; do
+  gcloud run services add-iam-policy-binding "$f" --region=me-west1 --member=allUsers \
+    --role=roles/run.invoker --project="$PROJECT" --quiet >/dev/null 2>&1 && echo "ok $f" || echo "skipped $f"
+done
+
+say "Letting the website open the private sheet-music files (CORS)"
+# Files stay private (the storage rules decide who may read). This only lets pages from
+# our own addresses ask for them.
+CORS_FILE="$(mktemp)"
+cat > "$CORS_FILE" <<JSON
+[{"origin": ["https://$PROJECT.web.app", "https://$PROJECT.firebaseapp.com"], "method": ["GET"], "responseHeader": ["Content-Type", "Authorization"], "maxAgeSeconds": 3600}]
+JSON
+gsutil cors set "$CORS_FILE" "gs://$BUCKET" || echo "WARNING: could not set CORS; sheet music will not open until it is set (see docs/DEPLOY-TRIAL.md)."
+rm -f "$CORS_FILE"
 
 say "Done"
 echo "Open:  https://$PROJECT.web.app"

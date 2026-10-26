@@ -86,7 +86,7 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 - Each item has a status: "עובד/ת על זה" / "מוכן!".
 - One recording per item, **max 3 minutes**. If a recording already exists, show a confirmation before replacing it: "כבר יש הקלטה לפריט הזה. להחליף אותה בהקלטה החדשה? ההקלטה הקודמת תימחק." with "להחליף" / "לבטל". On cancel, the new recording is discarded and the old one stays.
 - The teacher replies to a recording with short text.
-- **Copyright statement:** a teacher must tick "אני מצהיר/ת שיש לי זכות להשתמש בחומרים שאעלה, ואני אחראי/ת לתוכן שלהם" when they ask for approval and again at every upload of sheet music or backing tracks (the time is stored). The terms say the teacher is responsible and that the owner may remove any file; the owner can do that from `/admin`. Files stay private to the teacher and their confirmed students.
+- **Copyright statement:** a teacher ticks "אני מצהיר/ת שיש לי זכות להשתמש בחומרים שאעלה, ואני אחראי/ת לתוכן שלהם" **once**, when they ask for approval (the time is stored; the owner cannot approve without it). It is not repeated at each upload (owner decision, October 2026). The terms say the teacher is responsible and that the owner may remove any file; the owner can do that from `/admin`. Files stay private to the teacher and their confirmed students.
 - The teacher can save an assignment as a **template** and copy it to other students or other weeks.
 - Accompaniment player: play/stop only. Metronome: uses the item's BPM.
 
@@ -98,11 +98,11 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 | `inviteCodes/{code}` | teacherId — **no client access**, Functions only |
 | `parentConsents/{id}` | id = the student's uid. studentId, teacherId, parentEmail (deleted after approval), tokenHash (deleted after use), sentAt, expiresAt, parentName, approvedAt, consentTextVersion, manageTokenHash, withdrawnAt — teacher can read status of own students only; writes via Functions only |
 | `assignments/{id}` | teacherId, studentId, title, description, dailyGoalMinutes, weekStart, createdAt |
-| `assignments/{id}/items/{itemId}` | position, title, sheetPath, accompanimentPath, youtubeUrl, metronomeBpm, status (working/ready), statusUpdatedAt, recording { path, durationSeconds, uploadedAt } |
+| `assignments/{id}/items/{itemId}` | position, title, notes (the teacher's practice tips, text), sheetPath, accompanimentPath, youtubeUrl, metronomeBpm, status (working/ready), statusUpdatedAt, recording { path, durationSeconds, uploadedAt } |
 | `assignments/{id}/items/{itemId}/comments/{commentId}` | authorId, text, createdAt, readAt (for the "חדש" badge) |
 | `practiceLogs/{id}` | studentId, teacherId, assignmentId, minutes, startedAt, endedAt |
 | `templates/{id}` | teacherId, title, description, dailyGoalMinutes, createdAt |
-| `templates/{id}/items/{itemId}` | position, title, sheetPath, accompanimentPath, youtubeUrl, metronomeBpm |
+| `templates/{id}/items/{itemId}` | position, title, notes, sheetPath, accompanimentPath, youtubeUrl, metronomeBpm |
 
 `teacherId` and `studentId` are duplicated onto documents on purpose so security rules can check access without extra reads. A teacher's access to a student's documents is also checked against the student's current link, so **teacher queries on assignments and practice logs must always filter by one `studentId`** (one query per student).
 
