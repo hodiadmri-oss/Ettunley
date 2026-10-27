@@ -20,7 +20,8 @@ import {
   type Item,
   type ItemDraft,
 } from '@/lib/assignments'
-import { checkSheetFile, deleteSheet, sheetProblemMessage, uploadSheet } from '@/lib/sheetFiles'
+import { checkSheetFile, copySheet, deleteSheet, sheetProblemMessage, uploadSheet } from '@/lib/sheetFiles'
+import { listTemplates, loadTemplate, saveAsTemplate, type Template } from '@/lib/templates'
 import { weekChoices, weekLabel, weekStartOf } from '@/lib/weeks'
 
 const emptyItem = (): ItemDraft => ({ title: '', notes: '', youtube: '', bpm: '', hasRecording: false })
@@ -52,6 +53,8 @@ export default function AssignmentEditor() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [templateSaved, setTemplateSaved] = useState(false)
   // Stable keys for the item cards (an item has no id until it is saved).
   const [keys, setKeys] = useState<string[]>(() => [crypto.randomUUID()])
 
@@ -85,6 +88,41 @@ export default function AssignmentEditor() {
     }
   }, [editing, assignmentId, studentId])
 
+  useEffect(() => {
+    if (editing || !teacherUid) return
+    let cancelled = false
+    listTemplates(teacherUid)
+      .then((list) => {
+        if (!cancelled) setTemplates(list)
+      })
+      .catch(() => {
+        // the list of templates is a convenience; the form works without it
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [editing, teacherUid])
+
+  async function applyTemplate(id: string) {
+    if (!id) return
+    setError(null)
+    try {
+      const content = await loadTemplate(id)
+      if (!content) return setError('התבנית לא נמצאה.')
+      setDraft((d) => ({
+        ...d,
+        title: content.title,
+        description: content.description,
+        dailyGoalMinutes: content.dailyGoalMinutes,
+        items: content.items.length > 0 ? content.items : [emptyItem()],
+      }))
+      setGoalText(String(content.dailyGoalMinutes))
+      setKeys((content.items.length > 0 ? content.items : [emptyItem()]).map(() => crypto.randomUUID()))
+    } catch {
+      setError('לא הצלחנו לטעון את התבנית. אפשר לנסות שוב.')
+    }
+  }
+
   const setItem = (index: number, patch: Partial<ItemDraft>) =>
     setDraft((d) => ({ ...d, items: d.items.map((it, i) => (i === index ? { ...it, ...patch } : it)) }))
 
@@ -110,30 +148,61 @@ export default function AssignmentEditor() {
     setError(null)
     const old = draft.items[index].sheetPath
     if (old) setObsolete((o) => [...o, old])
-    setItem(index, { newSheet: file, sheetPath: undefined })
+    setItem(index, { newSheet: file, sheetPath: undefined, copySheetFrom: undefined })
   }
 
   function clearSheet(index: number) {
     const old = draft.items[index].sheetPath
     if (old) setObsolete((o) => [...o, old])
-    setItem(index, { newSheet: undefined, sheetPath: undefined })
+    setItem(index, { newSheet: undefined, sheetPath: undefined, copySheetFrom: undefined })
   }
 
-  async function save() {
-    if (!teacherUid || busy) return
+  // The form as a draft, or null (with the error shown) when something is missing.
+  function validDraft(): AssignmentDraft | null {
     const goal = Number(goalText)
     const full: AssignmentDraft = { ...draft, dailyGoalMinutes: goalText.trim() === '' ? NaN : goal }
     const problem = draftProblem(full)
     if (problem) {
       setError(draftProblemMessage(problem))
-      return
+      return null
     }
+    return full
+  }
+
+  async function saveTemplate() {
+    if (!teacherUid || busy) return
+    const full = validDraft()
+    if (!full) return
     setBusy(true)
     setError(null)
+    setTemplateSaved(false)
+    try {
+      await saveAsTemplate(teacherUid, full)
+      setTemplateSaved(true)
+    } catch {
+      setError('לא הצלחנו לשמור את התבנית. אפשר לנסות שוב.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function save() {
+    if (!teacherUid || busy) return
+    const full = validDraft()
+    if (!full) return
+    setBusy(true)
+    setError(null)
+    setTemplateSaved(false)
     const uploaded: (string | undefined)[] = []
     try {
       for (const item of full.items) {
-        uploaded.push(item.newSheet ? await uploadSheet(teacherUid, item.newSheet) : undefined)
+        uploaded.push(
+          item.newSheet
+            ? await uploadSheet(teacherUid, item.newSheet)
+            : item.copySheetFrom
+              ? await copySheet(teacherUid, item.copySheetFrom)
+              : undefined,
+        )
       }
       if (editing && assignmentId) await updateAssignment(assignmentId, full, uploaded, existing)
       else await createAssignment(teacherUid, studentId, full, uploaded)
@@ -176,6 +245,20 @@ export default function AssignmentEditor() {
           void save()
         }}
       >
+        {!editing && templates.length > 0 && (
+          <div className="flex flex-col gap-2 rounded-2xl bg-sky p-3">
+            <Label htmlFor="template">להתחיל מתבנית (לא חובה)</Label>
+            <select id="template" className={selectClass} defaultValue="" onChange={(e) => void applyTemplate(e.target.value)}>
+              <option value="">בלי תבנית</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2">
           <Label htmlFor="title">כותרת</Label>
           <Input
@@ -263,7 +346,7 @@ export default function AssignmentEditor() {
               />
 
               <div className="flex flex-col gap-2">
-                {item.newSheet || item.sheetPath ? (
+                {item.newSheet || item.sheetPath || item.copySheetFrom ? (
                   <p className="rounded-2xl bg-sage px-3 py-2 text-base">
                     ✓ {item.newSheet ? `נבחר: ${item.newSheet.name}` : 'יש קובץ תווים'}
                   </p>
@@ -273,7 +356,7 @@ export default function AssignmentEditor() {
                 <div className="grid grid-cols-2 gap-2">
                   <Button asChild variant="soft">
                     <label>
-                      {item.newSheet || item.sheetPath ? 'החלפת קובץ' : 'בחירת קובץ'}
+                      {item.newSheet || item.sheetPath || item.copySheetFrom ? 'החלפת קובץ' : 'בחירת קובץ'}
                       <input
                         type="file"
                         accept="image/*,application/pdf"
@@ -285,7 +368,7 @@ export default function AssignmentEditor() {
                       />
                     </label>
                   </Button>
-                  {(item.newSheet || item.sheetPath) && (
+                  {(item.newSheet || item.sheetPath || item.copySheetFrom) && (
                     <Button type="button" variant="outline" onClick={() => clearSheet(index)}>
                       הסרת הקובץ
                     </Button>
@@ -313,6 +396,14 @@ export default function AssignmentEditor() {
         <Button type="submit" size="large" disabled={busy}>
           {busy ? 'שומרים...' : 'שמירה'}
         </Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => void saveTemplate()}>
+          שמירה כתבנית
+        </Button>
+        {templateSaved && (
+          <p role="status" className="rounded-2xl bg-sage px-4 py-3 text-center text-base">
+            ✓ נשמרה כתבנית. אפשר למצוא אותה ב״התבניות שלי״ ובמטלה חדשה.
+          </p>
+        )}
       </form>
     </Screen>
   )

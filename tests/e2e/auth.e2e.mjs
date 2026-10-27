@@ -449,6 +449,45 @@ try {
   await noaPage.waitForSelector('text=הסולם')
   check('the edit reaches the student: new title, one item removed', (await noaPage.locator('main').innerText()).includes('האטיוד') === false)
 
+  // ---------- templates ----------
+  await danaPage.click('a:has-text("סולם סול מז׳ור ושיר")')
+  await danaPage.waitForSelector('text=עריכת מטלה')
+  await danaPage.click('button:has-text("שמירה כתבנית")')
+  await danaPage.waitForSelector('text=✓ נשמרה כתבנית')
+  check('the assignment is saved as a template', true)
+  await danaPage.goto(`${BASE}/teacher`)
+  await danaPage.click('a:has-text("התבניות שלי")')
+  await danaPage.waitForSelector('article:has-text("סולם סול מז׳ור ושיר")')
+  check('the template is listed with its daily goal', (await danaPage.locator('article').first().innerText()).includes('יעד יומי: 15 דקות'))
+  await shot(danaPage, '46-templates')
+
+  await danaPage.goto(`${BASE}/teacher`)
+  await danaPage.click('a:has-text("נועה כהן")')
+  await danaPage.click('a:has-text("מטלה חדשה")')
+  await danaPage.waitForSelector('#template')
+  await danaPage.selectOption('#template', { label: 'סולם סול מז׳ור ושיר' })
+  await danaPage.waitForFunction(() => document.querySelector('#title')?.value === 'סולם סול מז׳ור ושיר')
+  check('picking a template fills the form, including the sheet music', (await danaPage.locator('text=יש קובץ תווים').count()) === 1 && (await danaPage.inputValue('input[aria-label="שם פריט 1"]')) === 'הסולם')
+  await danaPage.selectOption('#week', { label: 'שבוע הבא' })
+  await danaPage.click('button:has-text("שמירה")')
+  await danaPage.waitForSelector('h3:has-text("שבוע הבא")')
+  check('the new assignment from the template is listed under next week', true)
+
+  // deleting the template does not touch assignments made from it
+  await danaPage.goto(`${BASE}/teacher/templates`)
+  await danaPage.click('text=מחיקה')
+  await danaPage.click('button:has-text("כן, למחוק")')
+  await danaPage.waitForSelector('text=עדיין אין תבניות')
+  check('a template can be deleted', true)
+
+  await noaPage.goto(`${BASE}/student`)
+  await noaPage.waitForSelector('h3:has-text("שבוע הבא")')
+  await noaPage.click('section:has(h3:has-text("שבוע הבא")) a')
+  await noaPage.waitForSelector('text=לאט, עם מטרונום')
+  await noaPage.click('button:has-text("הצגת התווים")')
+  await noaPage.waitForSelector('img[alt="תווים"]')
+  check('the assignment made from the template keeps its own copy of the sheet music after the template is deleted', true)
+
   // removing the student
   await danaPage.goto(`${BASE}/teacher`)
   await danaPage.click('a:has-text("נועה כהן")')

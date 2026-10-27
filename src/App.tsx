@@ -14,6 +14,7 @@ import ResetPassword from '@/screens/ResetPassword'
 import Settings from '@/screens/Settings'
 import SignIn from '@/screens/SignIn'
 import SignUp from '@/screens/SignUp'
+import Templates from '@/screens/Templates'
 import StudentAssignment from '@/screens/StudentAssignment'
 import StudentHome from '@/screens/StudentHome'
 import TeacherHome from '@/screens/TeacherHome'
@@ -87,6 +88,7 @@ function Router() {
       )}
       {state.profile.role === 'teacher' && (
         <>
+          <Route path="/teacher/templates" element={<Templates />} />
           <Route path="/teacher/student/:studentId" element={<TeacherStudent />} />
           <Route path="/teacher/student/:studentId/new-assignment" element={<AssignmentEditor />} />
           <Route path="/teacher/student/:studentId/assignment/:assignmentId" element={<AssignmentEditor />} />

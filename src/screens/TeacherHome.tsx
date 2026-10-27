@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { giveCopyrightStatement } from '@/auth/profile'
 import { ErrorNote } from '@/components/ErrorNote'
@@ -85,6 +86,9 @@ export default function TeacherHome() {
       ) : (
         <>
           <StudentsList />
+          <Link to="/teacher/templates" className="flex min-h-12 items-center justify-center rounded-2xl bg-peach px-4 py-3 text-lg font-medium">
+            התבניות שלי
+          </Link>
           {profile.inviteCode && <InviteCodeCard code={profile.inviteCode} />}
         </>
       )}

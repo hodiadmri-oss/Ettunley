@@ -49,6 +49,8 @@ export interface ItemDraft {
   bpm: string
   sheetPath?: string
   newSheet?: File
+  /** Sheet music of a template: copied when the assignment is saved. */
+  copySheetFrom?: string
   hasRecording: boolean
 }
 
