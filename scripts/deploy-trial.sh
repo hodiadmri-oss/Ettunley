@@ -68,7 +68,13 @@ fi
 API_KEY="$($FB apps:sdkconfig WEB "$APP_ID" --project "$PROJECT" 2>/dev/null | grep -oE 'AIza[0-9A-Za-z_-]{35}' | head -1 || true)"
 [ -n "$API_KEY" ] || die "Could not read the web key."
 printf 'VITE_FIREBASE_API_KEY=%s\n' "$API_KEY" > .env.production.local
-printf 'APP_URL=https://%s.web.app\n' "$PROJECT" > "functions/.env.$PROJECT"
+# The values below are the defaults the deploy would otherwise ask about every time.
+# Replace them before a wider launch (see LAUNCH-CHECKLIST.md).
+{
+  printf 'APP_URL=https://%s.web.app\n' "$PROJECT"
+  printf 'EMAIL_FROM=Etunley <onboarding@resend.dev>\n'
+  printf 'PRIVACY_CONTACT_EMAIL=privacy@example.invalid\n'
+} > "functions/.env.$PROJECT"
 
 say "6/7 E-mail key placeholder"
 if ! $FB functions:secrets:access RESEND_API_KEY --project "$PROJECT" >/dev/null 2>&1; then
