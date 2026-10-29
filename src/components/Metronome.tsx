@@ -4,6 +4,8 @@ import { allowSoundOnSilentSwitch, claimSound, releaseSound } from '@/lib/sound'
 
 const MIN_BPM = 20
 const MAX_BPM = 300
+// The bar covers the tempos used in practice; the + button goes up to 300.
+const SLIDER_MAX_BPM = 220
 const DEFAULT_BPM = 60
 const LOOK_AHEAD_SECONDS = 0.12
 const TICK_MS = 25
@@ -64,7 +66,7 @@ export function Metronome({ id, teacherBpm }: { id: string; teacherBpm?: number 
   }
 
   const change = (delta: number) => setBpm((current) => clamp(current + delta))
-  const step = 'min-h-12 min-w-12 rounded-2xl border border-ink/20 bg-white px-3 text-lg font-medium'
+  const step = 'size-12 shrink-0 rounded-full border border-ink/20 bg-white text-2xl font-medium'
 
   return (
     <section aria-label="מטרונום" className="flex flex-col gap-3 rounded-2xl bg-sky p-3">
@@ -72,21 +74,25 @@ export function Metronome({ id, teacherBpm }: { id: string; teacherBpm?: number 
         <h4 className="text-base font-bold">מטרונום</h4>
         {teacherBpm !== undefined && <p className="text-sm">המורה ביקשה: {teacherBpm}</p>}
       </div>
-      <div className="flex items-center justify-center gap-2" dir="ltr">
-        <button type="button" className={step} aria-label="להאט ב-5" onClick={() => change(-5)}>
-          −5
-        </button>
+      <p className="text-center text-4xl font-bold tabular-nums" aria-live="polite" aria-label="פעימות בדקה">
+        {bpm}
+      </p>
+      <div className="flex items-center gap-2" dir="ltr">
         <button type="button" className={step} aria-label="להאט ב-1" onClick={() => change(-1)}>
           −
         </button>
-        <p className="min-w-16 text-center text-3xl font-bold" aria-live="polite" aria-label="פעימות בדקה">
-          {bpm}
-        </p>
+        <input
+          type="range"
+          min={MIN_BPM}
+          max={SLIDER_MAX_BPM}
+          step={1}
+          value={Math.min(bpm, SLIDER_MAX_BPM)}
+          aria-label="קצב המטרונום"
+          onChange={(e) => setBpm(clamp(Number(e.target.value)))}
+          className="h-10 min-w-0 flex-1 accent-ink"
+        />
         <button type="button" className={step} aria-label="להאיץ ב-1" onClick={() => change(1)}>
           +
-        </button>
-        <button type="button" className={step} aria-label="להאיץ ב-5" onClick={() => change(5)}>
-          +5
         </button>
       </div>
       <Button variant={playing ? 'outline' : 'primary'} onClick={() => (playing ? stop() : start())}>

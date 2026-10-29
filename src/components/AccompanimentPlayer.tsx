@@ -1,72 +1,98 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { claimSound, isActiveSound, releaseSound, silentSoundUrl } from '@/lib/sound'
-import { loadSheet } from '@/lib/sheetFiles'
+import { claimSound, isActiveSound, releaseSound } from '@/lib/sound'
 import { formatClock } from '@/lib/practiceTimer'
+import { loadSheet } from '@/lib/sheetFiles'
 
 const SKIP_SECONDS = 10
 
-// The backing track: play, pause, and move to any point (a bar to drag, and 10 seconds back
-// or forward) to start from a passage. No tempo change and no looping. The file is fetched with
-// the student's own sign-in on the first tap.
+// The backing track as a small player: a play triangle, a bar with a dot to move to any
+// point, the time, and 10 seconds back or forward. No tempo change and no looping.
+// The file is fetched with the student's own sign-in when the player comes into view, so the
+// play button works at once when it is tapped (phones only start sound from a tap).
 export function AccompanimentPlayer({ id, path }: { id: string; path: string }) {
-  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle')
+  const holder = useRef<HTMLElement>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [wanted, setWanted] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+  const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const urlRef = useRef<string | null>(null)
 
   // Pauses where it is (the position is kept).
   const pause = useCallback(() => {
     audioRef.current?.pause()
-    setState((current) => (current === 'error' ? current : 'idle'))
+    setPlaying(false)
     releaseSound(id)
   }, [id])
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const node = holder.current
+    if (!node || wanted) return
+    if (typeof IntersectionObserver === 'undefined') {
+      setWanted(true)
+      return
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setWanted(true)
+        observer.disconnect()
+      }
+    })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [wanted])
+
+  useEffect(() => {
+    if (!wanted) return
+    let cancelled = false
+    let url: string | null = null
+    setFailed(null)
+    setReady(false)
+    loadSheet(path)
+      .then((blob) => {
+        if (cancelled) return
+        url = URL.createObjectURL(blob)
+        const audio = new Audio()
+        audio.preload = 'auto'
+        audio.onended = () => {
+          audio.currentTime = 0
+          setTime(0)
+          setPlaying(false)
+          releaseSound(id)
+        }
+        audio.ontimeupdate = () => setTime(audio.currentTime)
+        audio.ondurationchange = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
+        audio.onerror = () => setFailed('הקובץ לא מתנגן במכשיר הזה.')
+        audio.src = url
+        audioRef.current = audio
+        setReady(true)
+      })
+      .catch(() => {
+        if (!cancelled) setFailed('לא הצלחנו לטעון את הליווי.')
+      })
+    return () => {
+      cancelled = true
       audioRef.current?.pause()
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current)
+      audioRef.current = null
+      if (url) URL.revokeObjectURL(url)
       releaseSound(id)
-    },
-    [id],
-  )
+      setPlaying(false)
+    }
+  }, [path, wanted, id])
 
   async function play() {
+    const audio = audioRef.current
+    if (!audio) return
     claimSound(id, pause)
-    // The element is "unlocked" by this tap (needed on iPhone/iPad), then given the real file.
-    const audio = audioRef.current ?? new Audio()
-    if (!audioRef.current) {
-      audioRef.current = audio
-      audio.onended = () => {
-        audio.currentTime = 0
-        setTime(0)
-        pause()
-      }
-      audio.ontimeupdate = () => setTime(audio.currentTime)
-      audio.ondurationchange = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
-    }
+    // Something else may have been started meanwhile: then this must not start.
+    if (!isActiveSound(id)) return
     try {
-      if (!urlRef.current) {
-        setState('loading')
-        audio.src = silentSoundUrl()
-        void audio.play().catch(() => undefined)
-        const blob = await loadSheet(path)
-        // Something else (the metronome, another track) was started while this was loading:
-        // this one must not start now.
-        if (!isActiveSound(id)) {
-          audio.pause()
-          setState('idle')
-          return
-        }
-        urlRef.current = URL.createObjectURL(blob)
-        audio.src = urlRef.current
-      }
       await audio.play()
-      setState('playing')
-    } catch {
+      setPlaying(true)
+    } catch (error) {
       releaseSound(id)
-      setState('error')
+      setFailed(`לא הצלחנו לנגן (${(error as Error).name || 'שגיאה'}).`)
     }
   }
 
@@ -78,45 +104,45 @@ export function AccompanimentPlayer({ id, path }: { id: string; path: string }) 
     setTime(target)
   }
 
-  const loaded = duration > 0
-  const skip = 'min-h-12 rounded-2xl border border-ink/20 bg-white px-3 text-base font-medium'
+  const small = 'rounded-xl px-2 py-2 text-sm underline'
 
   return (
-    <section aria-label="ליווי" className="flex flex-col gap-2 rounded-2xl bg-sage p-3">
+    <section ref={holder} aria-label="ליווי" className="flex flex-col gap-1 rounded-2xl bg-sage p-3">
       <h4 className="text-base font-bold">ליווי</h4>
-      <Button
-        variant={state === 'playing' ? 'outline' : 'primary'}
-        disabled={state === 'loading'}
-        onClick={() => (state === 'playing' ? pause() : void play())}
-      >
-        {state === 'playing' ? '⏸ עצירה' : state === 'loading' ? 'טוענים...' : '▶ ניגון הליווי'}
-      </Button>
-      {loaded && (
-        <div className="flex flex-col gap-1" dir="ltr">
-          <input
-            type="range"
-            min={0}
-            max={duration}
-            step={0.1}
-            value={time}
-            aria-label="מקום בליווי"
-            onChange={(e) => seek(Number(e.target.value))}
-            className="h-8 w-full accent-ink"
-          />
-          <div className="flex items-center justify-between gap-2">
-            <button type="button" className={skip} aria-label="10 שניות אחורה" onClick={() => seek(time - SKIP_SECONDS)}>
-              ⏪ 10
-            </button>
-            <p className="text-sm tabular-nums" aria-live="off" data-testid="accompaniment-time">
-              {formatClock(time * 1000)} / {formatClock(duration * 1000)}
-            </p>
-            <button type="button" className={skip} aria-label="10 שניות קדימה" onClick={() => seek(time + SKIP_SECONDS)}>
-              10 ⏩
-            </button>
-          </div>
-        </div>
-      )}
-      {state === 'error' && <p role="alert" className="text-sm">לא הצלחנו לנגן את הקובץ. אפשר לנסות שוב.</p>}
+      <div className="flex items-center gap-3" dir="ltr">
+        <button
+          type="button"
+          aria-label={playing ? 'עצירת הליווי' : 'ניגון הליווי'}
+          disabled={!ready}
+          onClick={() => (playing ? pause() : void play())}
+          className="flex size-12 shrink-0 items-center justify-center rounded-full bg-ink text-xl text-white disabled:opacity-40"
+        >
+          {playing ? '❚❚' : '▶'}
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={duration || 1}
+          step={0.1}
+          value={Math.min(time, duration || 1)}
+          disabled={!ready || duration === 0}
+          aria-label="מקום בליווי"
+          onChange={(e) => seek(Number(e.target.value))}
+          className="h-10 min-w-0 flex-1 accent-ink"
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2" dir="ltr">
+        <button type="button" className={small} aria-label="10 שניות אחורה" disabled={!ready} onClick={() => seek(time - SKIP_SECONDS)}>
+          ⏪ 10
+        </button>
+        <p className="text-sm tabular-nums" aria-live="off" data-testid="accompaniment-time">
+          {ready ? `${formatClock(time * 1000)} / ${formatClock(duration * 1000)}` : 'טוענים...'}
+        </p>
+        <button type="button" className={small} aria-label="10 שניות קדימה" disabled={!ready} onClick={() => seek(time + SKIP_SECONDS)}>
+          10 ⏩
+        </button>
+      </div>
+      {failed && <p role="alert" className="text-sm">{failed}</p>}
     </section>
   )
 }

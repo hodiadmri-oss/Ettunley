@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { AssignmentList } from '@/components/AssignmentList'
 import { ErrorNote } from '@/components/ErrorNote'
 import { listAssignments, type Assignment } from '@/lib/assignments'
+import { loadOverview, type AssignmentInfo } from '@/lib/studentOverview'
 
 // The student's home list: every assignment, newest week first. Assignments never close.
 export function StudentAssignments() {
@@ -13,6 +14,7 @@ export function StudentAssignments() {
   const teacherId = state.status === 'ready' ? (state.profile.teacherId ?? null) : null
   const [assignments, setAssignments] = useState<Assignment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<Record<string, AssignmentInfo>>({})
 
   useEffect(() => {
     if (!uid || !teacherId) return
@@ -24,6 +26,8 @@ export function StudentAssignments() {
           setAssignments(list)
           setError(null)
         }
+        const overview = await loadOverview(uid, list)
+        if (!cancelled) setInfo(overview)
       } catch {
         if (!cancelled) setError('לא הצלחנו לטעון את המטלות. אפשר לנסות שוב.')
       }
@@ -51,6 +55,7 @@ export function StudentAssignments() {
           assignments={assignments}
           hrefFor={(a) => `/student/assignment/${a.id}`}
           emptyText="עדיין אין מטלות. כשהמורה תוסיף, הן יופיעו כאן."
+          info={info}
         />
       )}
     </section>
