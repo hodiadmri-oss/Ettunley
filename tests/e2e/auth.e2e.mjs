@@ -563,8 +563,21 @@ try {
   await noaPage.waitForSelector('[data-testid=assignment-status]')
   const row = noaPage.locator('a:has-text("סולם סול מז׳ור")').first()
   const rowText = await row.innerText()
-  check('the home list shows how many items are ready, and today\'s practice next to the daily goal', rowText.includes('עובד/ת על זה · 1/2') && /יעד יומי: 15 דקות · היום: 05:1\d/.test(rowText), rowText)
-  await row.click()
+  check('the home list shows how many items are ready, and today\'s practice (just the time) next to the daily goal, with no tick before the goal is reached', rowText.includes('עובד/ת על זה · 1/2') && /יעד יומי: 15 דקות\s*·\s*05:1\d/.test(rowText) && (await row.locator('[data-testid=goal-reached]').count()) === 0, rowText)
+  // reaching the daily goal: a tick appears next to it (a 10-minute session is added so today's total passes 15 minutes)
+  const now = new Date().toISOString()
+  const seededLog = await fetch(`${fsHost}/v1/projects/${PROJECT}/databases/(default)/documents/practiceLogs?documentId=seeded1`, {
+    method: 'POST', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: {
+      studentId: { stringValue: noaUid }, teacherId: { stringValue: (await profileOf(noaUid)).teacherId }, assignmentId: { stringValue: assignmentId },
+      seconds: { integerValue: '600' }, startedAt: { timestampValue: now }, endedAt: { timestampValue: now },
+    } }),
+  })
+  check('(setup) a 10-minute session was added', seededLog.ok)
+  await noaPage.goto(`${BASE}/student`)
+  await noaPage.locator('[data-testid=goal-reached]').waitFor()
+  check('when today\'s practice reaches the daily goal a tick appears next to it', /15:1\d/.test(await noaPage.locator('[data-testid=practice-today]').first().innerText()))
+  await noaPage.locator('a:has-text("סולם סול מז׳ור")').first().click()
   await noaPage.locator('article').nth(1).locator('button:has-text("מוכן!")').click()
   await noaPage.locator('article').nth(1).locator('button[aria-pressed=true]:has-text("מוכן!")').waitFor()
   await noaPage.waitForTimeout(500)

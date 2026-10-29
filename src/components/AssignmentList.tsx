@@ -45,13 +45,21 @@ export function AssignmentList({
                 <span className="text-lg font-bold">{a.title}</span>
                 <StatusChip info={info?.[a.id]} />
               </span>
-              <span className="text-sm text-ink/60">
-                יעד יומי: {a.dailyGoalMinutes} דקות
-                {info?.[a.id]?.todayMs ? (
+              <span className="flex items-center gap-1 text-sm text-ink/60">
+                <span>יעד יומי: {a.dailyGoalMinutes} דקות</span>
+                {info?.[a.id]?.todayMs !== undefined && info[a.id].todayMs !== null && (
                   <>
-                    {' · '}היום: <bdi>{formatClock(info[a.id].todayMs ?? 0)}</bdi>
+                    {info[a.id].todayMs! >= a.dailyGoalMinutes * 60000 && (
+                      <span aria-label="הגעת ליעד היומי" className="font-bold text-ink" data-testid="goal-reached">
+                        ✓
+                      </span>
+                    )}
+                    <span aria-hidden="true">·</span>
+                    <bdi className="tabular-nums" data-testid="practice-today">
+                      {formatClock(info[a.id].todayMs ?? 0)}
+                    </bdi>
                   </>
-                ) : null}
+                )}
               </span>
             </Link>
           ))}
