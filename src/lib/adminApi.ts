@@ -45,3 +45,30 @@ export async function listTeacherFiles(teacherUid: string): Promise<{ files: Adm
 export async function removeTeacherFile(path: string): Promise<void> {
   await httpsCallable(functions, 'adminRemoveFile')({ path })
 }
+
+export interface AdminStudent {
+  name: string
+  instrument: string
+  isMinor: boolean
+  hasConsent: boolean
+  confirmed: boolean
+}
+
+export async function listTeacherStudents(teacherUid: string): Promise<AdminStudent[]> {
+  const result = await httpsCallable<{ teacherUid: string }, { students: AdminStudent[] }>(
+    functions,
+    'adminListStudents',
+  )({ teacherUid })
+  return result.data.students
+}
+
+export interface AdminFileContent {
+  name: string
+  contentType: string
+  dataBase64: string
+}
+
+export async function readTeacherFile(path: string): Promise<AdminFileContent> {
+  const result = await httpsCallable<{ path: string }, AdminFileContent>(functions, 'adminReadFile')({ path })
+  return result.data
+}

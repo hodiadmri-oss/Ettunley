@@ -120,3 +120,34 @@ describe('adminListFiles / adminRemoveFile', () => {
     expect(await fileExists(`recordings/${w.S}/${w.aid}/i1`)).toBe(true)
   })
 })
+
+describe('adminReadFile / adminListStudents', () => {
+  it('lets the owner read a file (to check what was uploaded)', async () => {
+    const w = await world()
+    const result = (await callAs(admin, 'adminReadFile', { path: w.sheet })) as { name: string; contentType: string; dataBase64: string }
+    expect(result.name).toBe('scale.pdf')
+    expect(result.contentType).toBe('application/pdf')
+    expect(Buffer.from(result.dataBase64, 'base64').toString()).toBe('x')
+  })
+
+  it('refuses files that are too large to send, missing files, other paths and everyone but the owner', async () => {
+    const w = await world()
+    const big = `sheet-music/${w.T}/big${w.n}`
+    await adminBucket().file(big).save(Buffer.alloc(6 * 1024 * 1024 + 1), { contentType: 'application/pdf' })
+    expect(await errorCodeOf(callAs(admin, 'adminReadFile', { path: big }))).toBe('functions/failed-precondition')
+    expect(await errorCodeOf(callAs(admin, 'adminReadFile', { path: `sheet-music/${w.T}/none` }))).toBe('functions/not-found')
+    expect(await errorCodeOf(callAs(admin, 'adminReadFile', { path: `recordings/${w.S}/${w.aid}/i1` }))).toBe('functions/invalid-argument')
+    for (const caller of [w.teacher, w.student, null]) {
+      expect(['functions/permission-denied', 'functions/unauthenticated']).toContain(await errorCodeOf(callAs(caller, 'adminReadFile', { path: w.sheet })))
+    }
+  })
+
+  it('lists the students of a teacher by name, without e-mail, for the owner only', async () => {
+    const w = await world()
+    const result = (await callAs(admin, 'adminListStudents', { teacherUid: w.T })) as { students: Record<string, unknown>[] }
+    expect(result.students).toEqual([{ name: 'תלמיד', instrument: '', isMinor: false, hasConsent: true, confirmed: true }])
+    for (const caller of [w.teacher, w.student, null]) {
+      expect(['functions/permission-denied', 'functions/unauthenticated']).toContain(await errorCodeOf(callAs(caller, 'adminListStudents', { teacherUid: w.T })))
+    }
+  })
+})
