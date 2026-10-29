@@ -72,6 +72,8 @@ as small as possible:
 
 - **Done in phase 2:** assignments are deleted only by a Cloud Function that checks the caller is that assignment's approved teacher and the student is still theirs (it removes items, replies, the assignment's sheet music and the student's recordings for it; practice minutes stay). The owner can list a teacher's files (name, size, date, where used) and remove one from `/admin` (admin-only Functions; paths limited to `sheet-music/`). Sheet music is only ever shown through the signed-in user's own download (never a public link); each assignment and template owns its own copy of a file.
 
+- **Decision (owner, October 2026):** a student sees only assignments of their *current* teacher. Those of a previous teacher stay stored (the student's own data, readable by the student by the rules) but are not shown in the app. Later phases (practice, streak, "new reply" badge) must apply the same filter.
+
 ### Phases 3–4 (practice, recording)
 - Microphone rules from section 1. Replace/discard flow exactly as in `CLAUDE.md`.
 - Check the file really is audio on the server (Storage "finalize" function: magic bytes, size) because the declared type is client-chosen.

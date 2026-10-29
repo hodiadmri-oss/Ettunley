@@ -566,6 +566,22 @@ try {
   await noaPage.waitForSelector('a:has-text("סולם סול מז׳ור ושיר")')
   check('and from the student list', (await noaPage.locator('h3:has-text("שבוע הבא")').count()) === 0)
 
+  // ---------- an assignment of a previous teacher is not shown ----------
+  const seeded = await fetch(`${fsHost}/v1/projects/${PROJECT}/databases/(default)/documents/assignments?documentId=oldteacher1`, {
+    method: 'POST', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: {
+      teacherId: { stringValue: 'someOldTeacher' }, studentId: { stringValue: noaUid }, title: { stringValue: 'מטלה ממורה קודמת' },
+      dailyGoalMinutes: { integerValue: '10' }, weekStart: { timestampValue: new Date().toISOString() },
+    } }),
+  })
+  check('(setup) an assignment of an older teacher exists for the student', seeded.ok)
+  await noaPage.goto(`${BASE}/student`)
+  await noaPage.waitForSelector('a:has-text("סולם סול מז׳ור ושיר")')
+  check('the student home shows only the current teacher assignments', (await noaPage.locator('a:has-text("מטלה ממורה קודמת")').count()) === 0)
+  await noaPage.goto(`${BASE}/student/assignment/oldteacher1`)
+  await noaPage.waitForSelector('text=המטלה לא נמצאה')
+  check('and opening an old assignment directly says it is not found', true)
+
   // removing the student
   await danaPage.goto(`${BASE}/teacher`)
   await danaPage.click('a:has-text("נועה כהן")')

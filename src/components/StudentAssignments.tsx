@@ -8,15 +8,18 @@ import { listAssignments, type Assignment } from '@/lib/assignments'
 export function StudentAssignments() {
   const { state } = useAuth()
   const uid = state.status === 'ready' ? state.user.uid : null
+  // Only the current teacher's assignments are shown. Those of a previous teacher stay
+  // stored (they are the student's own data) but do not appear.
+  const teacherId = state.status === 'ready' ? (state.profile.teacherId ?? null) : null
   const [assignments, setAssignments] = useState<Assignment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!uid) return
+    if (!uid || !teacherId) return
     let cancelled = false
     const load = async () => {
       try {
-        const list = await listAssignments(uid)
+        const list = await listAssignments(uid, teacherId)
         if (!cancelled) {
           setAssignments(list)
           setError(null)
@@ -34,7 +37,7 @@ export function StudentAssignments() {
       cancelled = true
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [uid])
+  }, [uid, teacherId])
 
   return (
     <section aria-labelledby="assignments-title" className="flex flex-col gap-3">

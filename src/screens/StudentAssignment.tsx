@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useAuth } from '@/auth/AuthProvider'
 import { ErrorNote } from '@/components/ErrorNote'
 import { Screen } from '@/components/Screen'
 import { SheetViewer } from '@/components/SheetViewer'
@@ -11,6 +12,8 @@ import { weekLabel } from '@/lib/weeks'
 // (Practice, status and recording arrive in the next phases.)
 export default function StudentAssignment() {
   const { assignmentId = '' } = useParams()
+  const { state } = useAuth()
+  const currentTeacher = state.status === 'ready' ? state.profile.teacherId : undefined
   const [data, setData] = useState<{ assignment: Assignment; items: Item[] } | null | 'missing'>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,7 +23,8 @@ export default function StudentAssignment() {
       try {
         const assignment = await getAssignment(assignmentId)
         if (cancelled) return
-        if (!assignment) return setData('missing')
+        // An assignment of a previous teacher is not shown.
+        if (!assignment || assignment.teacherId !== currentTeacher) return setData('missing')
         const items = await listItems(assignmentId)
         if (!cancelled) setData({ assignment, items })
       } catch {
@@ -30,7 +34,7 @@ export default function StudentAssignment() {
     return () => {
       cancelled = true
     }
-  }, [assignmentId])
+  }, [assignmentId, currentTeacher])
 
   if (data === null) {
     return (
