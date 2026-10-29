@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  describeSeconds, elapsedMs, finishTimer, formatClock, isTooOld, pauseTimer, recoverSession, resumeTimer, startTimer,
+  elapsedMs, finishTimer, formatClock, isTooOld, pauseTimer, recoverSession, resumeTimer, startTimer,
 } from '../../src/lib/practiceTimer'
 
 const S = 1000
@@ -63,11 +63,10 @@ describe('practice timer', () => {
     expect(isTooOld({ ...startTimer(0), savedAt: 0 }, 3 * 24 * 3600 * S)).toBe(false)
   })
 
-  it('formats the clock and the saved message in Hebrew', () => {
+  it('formats the clock: 00:17, 12:05 and 1:05:00', () => {
     expect(formatClock(65 * S)).toBe('01:05')
     expect(formatClock(0)).toBe('00:00')
-    expect(describeSeconds(40)).toBe('40 שניות')
-    expect(describeSeconds(60)).toBe('דקה')
-    expect(describeSeconds(12 * 60)).toBe('12 דקות')
+    expect(formatClock(17 * S)).toBe('00:17')
+    expect(formatClock(3900 * S)).toBe('1:05:00')
   })
 })

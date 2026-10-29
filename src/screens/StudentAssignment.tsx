@@ -15,10 +15,13 @@ import { weekLabel } from '@/lib/weeks'
 // The student opens one assignment: a timer for the whole assignment, and for each item the
 // tips, sheet music, YouTube, backing track, a metronome and the student's own status.
 // (Recording arrives in the next phase.)
-export default function StudentAssignment() {
-  const { assignmentId = '' } = useParams()
+export default function StudentAssignment({ preview = false }: { preview?: boolean }) {
+  const { assignmentId = '', studentId = '' } = useParams()
   const { state } = useAuth()
-  const currentTeacher = state.status === 'ready' ? state.profile.teacherId : undefined
+  // The student sees only the current teacher's assignments; in the teacher's preview it is
+  // her own assignment of that student.
+  const currentTeacher = state.status === 'ready' ? (preview ? state.user.uid : state.profile.teacherId) : undefined
+  const back = preview ? `/teacher/student/${studentId}/assignment/${assignmentId}` : '/student'
   const [data, setData] = useState<{ assignment: Assignment; items: Item[] } | null | 'missing'>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -43,14 +46,14 @@ export default function StudentAssignment() {
 
   if (data === null) {
     return (
-      <Screen title="רגע..." top backTo="/student">
+      <Screen title="רגע..." top backTo={back}>
         <ErrorNote message={error} />
       </Screen>
     )
   }
   if (data === 'missing') {
     return (
-      <Screen title="המטלה לא נמצאה" top backTo="/student">
+      <Screen title="המטלה לא נמצאה" top backTo={back}>
         <p className="text-center text-ink/70">אולי היא נמחקה.</p>
       </Screen>
     )
@@ -58,11 +61,16 @@ export default function StudentAssignment() {
 
   const { assignment, items } = data
   return (
-    <Screen title={assignment.title} subtitle={weekLabel(assignment.weekStart)} top backTo="/student">
+    <Screen title={assignment.title} subtitle={weekLabel(assignment.weekStart)} top backTo={back} backLabel={preview ? 'לעריכת המטלה' : 'חזרה'}>
+      {preview && (
+        <p className="rounded-2xl bg-sky px-4 py-3 text-center text-base">
+          כך המסך נראה לתלמיד/ה. מה שהתלמיד/ה סימן/ה מופיע, ואי אפשר לשנות כאן.
+        </p>
+      )}
       {assignment.description && <p className="whitespace-pre-wrap rounded-2xl bg-sage px-4 py-4 text-base">{assignment.description}</p>}
       <p className="text-center text-base text-ink/70">יעד יומי: {assignment.dailyGoalMinutes} דקות</p>
       {state.status === 'ready' && (
-        <PracticeTimer studentUid={state.user.uid} teacherId={assignment.teacherId} assignmentId={assignment.id} />
+        <PracticeTimer studentUid={preview ? studentId : state.user.uid} teacherId={assignment.teacherId} assignmentId={assignment.id} preview={preview} />
       )}
       <div className="flex flex-col gap-4">
         {items.map((item) => (
@@ -73,7 +81,7 @@ export default function StudentAssignment() {
             {item.youtubeUrl && <YoutubeLink url={item.youtubeUrl} />}
             {item.accompanimentPath && <AccompanimentPlayer id={`accompaniment-${item.id}`} path={item.accompanimentPath} />}
             <Metronome id={`metronome-${item.id}`} teacherBpm={item.metronomeBpm} />
-            <ItemStatus assignmentId={assignment.id} itemId={item.id} initial={item.status} />
+            <ItemStatus assignmentId={assignment.id} itemId={item.id} initial={item.status} readOnly={preview} />
           </article>
         ))}
       </div>

@@ -9,6 +9,11 @@ export function claimSound(id: string, stop: () => void): void {
   current = { id, stop }
 }
 
+// True while this sound is the one that was last started (nobody has taken over since).
+export function isActiveSound(id: string): boolean {
+  return current?.id === id
+}
+
 export function releaseSound(id: string): void {
   if (current?.id === id) current = null
 }

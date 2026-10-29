@@ -13,7 +13,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react'
 import { auth } from '@/lib/firebase'
 import { authErrorMessage } from '@/lib/authErrors'
-import { clearSession } from '@/lib/practice'
+import { clearAllSessions } from '@/lib/practice'
 import { cleanName, createProfile, loadProfile, type Profile, type Role } from './profile'
 
 export type AuthState =
@@ -165,7 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       signOut: () =>
         run(async () => {
-          clearSession()
+          clearAllSessions()
           await firebaseSignOut(auth)
         }),
     }),

@@ -5,7 +5,18 @@ import { db } from '@/lib/firebase'
 type Status = 'working' | 'ready'
 
 // The student's mark for one item: still working on it, or ready. Saved as soon as it is tapped.
-export function ItemStatus({ assignmentId, itemId, initial }: { assignmentId: string; itemId: string; initial: Status }) {
+export function ItemStatus({
+  assignmentId,
+  itemId,
+  initial,
+  readOnly = false,
+}: {
+  assignmentId: string
+  itemId: string
+  initial: Status
+  /** The teacher's preview: shows what the student marked, nothing can be changed. */
+  readOnly?: boolean
+}) {
   const [status, setStatus] = useState<Status>(initial)
   const [failed, setFailed] = useState(false)
 
@@ -38,6 +49,7 @@ export function ItemStatus({ assignmentId, itemId, initial }: { assignmentId: st
             key={option.value}
             type="button"
             aria-pressed={status === option.value}
+            disabled={readOnly}
             onClick={() => void choose(option.value)}
             className={`${base} ${status === option.value ? (option.value === 'ready' ? 'bg-sage font-bold' : 'bg-peach font-bold') : 'bg-white'}`}
           >

@@ -62,16 +62,12 @@ export function isTooOld(state: TimerState, now: number): boolean {
   return now - state.savedAt > 6 * 24 * 3600 * 1000
 }
 
+// "00:17", "12:05", and "1:05:00" from an hour on.
 export function formatClock(ms: number): string {
   const total = Math.floor(ms / 1000)
-  const minutes = Math.floor(total / 60)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
   const seconds = total % 60
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-}
-
-// "12 דקות", "דקה", "40 שניות": for the message after saving.
-export function describeSeconds(seconds: number): string {
-  if (seconds < 60) return `${seconds} שניות`
-  const minutes = Math.round(seconds / 60)
-  return minutes === 1 ? 'דקה' : `${minutes} דקות`
+  const two = (n: number) => String(n).padStart(2, '0')
+  return hours > 0 ? `${hours}:${two(minutes)}:${two(seconds)}` : `${two(minutes)}:${two(seconds)}`
 }

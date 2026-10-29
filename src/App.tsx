@@ -97,6 +97,7 @@ function Router() {
           <Route path="/teacher/student/:studentId" element={<TeacherStudent />} />
           <Route path="/teacher/student/:studentId/new-assignment" element={<AssignmentEditor />} />
           <Route path="/teacher/student/:studentId/assignment/:assignmentId" element={<AssignmentEditor />} />
+          <Route path="/teacher/student/:studentId/assignment/:assignmentId/preview" element={<StudentAssignment preview />} />
         </>
       )}
       <Route path="/settings" element={<Settings />} />
