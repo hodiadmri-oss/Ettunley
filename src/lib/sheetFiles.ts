@@ -42,9 +42,14 @@ export async function loadSheet(path: string): Promise<Blob> {
 }
 
 // A private copy of a file, in the teacher's own folder (used for templates, so that every
-// assignment and template owns its files). Returns the new path.
-export async function copySheet(teacherUid: string, fromPath: string): Promise<string> {
-  const blob = await loadSheet(fromPath)
+// assignment and template owns its files). Returns the new path. When many copies of the
+// same file are made in a row, pass the same `cache` so the file is downloaded only once.
+export async function copySheet(teacherUid: string, fromPath: string, cache?: Map<string, Blob>): Promise<string> {
+  let blob = cache?.get(fromPath)
+  if (!blob) {
+    blob = await loadSheet(fromPath)
+    cache?.set(fromPath, blob)
+  }
   const path = `sheet-music/${teacherUid}/${crypto.randomUUID()}`
   await uploadBytes(ref(storage, path), blob, { contentType: blob.type })
   return path

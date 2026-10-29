@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -13,7 +14,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { MAX_ITEMS, type AssignmentDraft, type ItemDraft } from '@/lib/assignments'
+import { createAssignment, MAX_ITEMS, type AssignmentDraft, type ItemDraft } from '@/lib/assignments'
 import { copySheet, deleteSheet, uploadSheet } from '@/lib/sheetFiles'
 import { normalizeYoutubeUrl } from '@/lib/youtube'
 
@@ -54,7 +55,7 @@ export async function listTemplates(teacherId: string): Promise<Template[]> {
 
 // The items come back as drafts whose sheet music is only *referenced* (copySheetFrom):
 // the file is copied when the new assignment is saved, so every assignment owns its files.
-export async function loadTemplate(id: string): Promise<TemplateContent | null> {
+export async function loadTemplate(id: string, forEdit = false): Promise<TemplateContent | null> {
   const snap = await getDoc(doc(db, 'templates', id))
   if (!snap.exists()) return null
   const x = snap.data()
@@ -70,7 +71,8 @@ export async function loadTemplate(id: string): Promise<TemplateContent | null> 
         notes: String(i.notes ?? ''),
         youtube: typeof i.youtubeUrl === 'string' ? i.youtubeUrl : '',
         bpm: typeof i.metronomeBpm === 'number' ? String(i.metronomeBpm) : '',
-        copySheetFrom: typeof i.sheetPath === 'string' ? i.sheetPath : undefined,
+        // Editing a template keeps its own files; a new assignment copies them.
+        ...(typeof i.sheetPath === 'string' ? (forEdit ? { sheetPath: i.sheetPath } : { copySheetFrom: i.sheetPath }) : {}),
         hasRecording: false,
       }
     }),
@@ -124,4 +126,77 @@ export async function deleteTemplate(id: string): Promise<void> {
   last.delete(doc(db, 'templates', id))
   await last.commit()
   await Promise.all(paths.map(deleteSheet))
+}
+
+// Editing a template: the template's fields are updated and its items are replaced.
+// `uploaded[i]` is the path of a newly uploaded sheet for item i; files that are no longer
+// used are removed afterwards.
+export async function updateTemplate(id: string, draft: AssignmentDraft, uploaded: (string | undefined)[]): Promise<void> {
+  const old = await getDocs(query(collection(db, 'templates', id, 'items'), limit(MAX_ITEMS)))
+  const oldPaths = old.docs.map((d) => d.data().sheetPath).filter((p): p is string => typeof p === 'string')
+  const description = draft.description.trim()
+  const head = writeBatch(db)
+  head.update(doc(db, 'templates', id), {
+    title: draft.title.trim(),
+    dailyGoalMinutes: draft.dailyGoalMinutes,
+    description: description || deleteField(),
+  })
+  await head.commit()
+
+  const keptPaths: string[] = []
+  const batch = writeBatch(db)
+  old.docs.forEach((d) => batch.delete(d.ref))
+  draft.items.forEach((item, position) => {
+    const youtube = item.youtube.trim() ? normalizeYoutubeUrl(item.youtube) : null
+    const sheet = uploaded[position] ?? item.sheetPath
+    const fields: Record<string, unknown> = { position, title: item.title.trim() }
+    if (item.notes.trim()) fields.notes = item.notes.trim()
+    if (sheet) {
+      fields.sheetPath = sheet
+      keptPaths.push(sheet)
+    }
+    if (youtube) fields.youtubeUrl = youtube
+    if (item.bpm.trim()) fields.metronomeBpm = Number(item.bpm)
+    batch.set(doc(collection(db, 'templates', id, 'items')), fields)
+  })
+  await batch.commit()
+  await Promise.all(oldPaths.filter((p) => !keptPaths.includes(p)).map(deleteSheet))
+}
+
+export interface AssignResult {
+  done: string[]
+  failed: string[]
+}
+
+// Gives the template to several students at once. Every assignment gets its own copy of
+// the sheet music. A student who fails does not stop the others.
+export async function assignTemplate(
+  teacherUid: string,
+  students: { uid: string; name: string }[],
+  weekStart: Date,
+  content: TemplateContent,
+): Promise<AssignResult> {
+  const cache = new Map<string, Blob>()
+  const result: AssignResult = { done: [], failed: [] }
+  for (const student of students) {
+    const copies: (string | undefined)[] = []
+    try {
+      for (const item of content.items) {
+        copies.push(item.copySheetFrom ? await copySheet(teacherUid, item.copySheetFrom, cache) : undefined)
+      }
+      const draft: AssignmentDraft = {
+        title: content.title,
+        description: content.description,
+        dailyGoalMinutes: content.dailyGoalMinutes,
+        weekStart,
+        items: content.items.map((i) => ({ ...i, copySheetFrom: undefined })),
+      }
+      await createAssignment(teacherUid, student.uid, draft, copies)
+      result.done.push(student.name)
+    } catch {
+      await Promise.all(copies.filter((p): p is string => Boolean(p)).map(deleteSheet))
+      result.failed.push(student.name)
+    }
+  }
+  return result
 }

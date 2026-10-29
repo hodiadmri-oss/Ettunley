@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { giveCopyrightStatement } from '@/auth/profile'
 import { ErrorNote } from '@/components/ErrorNote'
 import { HomeFooter } from '@/components/HomeFooter'
 import { InviteCodeCard } from '@/components/InviteCodeCard'
 import { Screen } from '@/components/Screen'
+import { TeacherTabs } from '@/components/TeacherTabs'
 import { StudentsList } from '@/components/StudentsList'
 import { Button } from '@/components/ui/button'
 
@@ -71,8 +72,8 @@ function PendingTeacher() {
   )
 }
 
-// The teacher's home: the students first (tap one to see their assignments), and the
-// invite code, which is needed only when a new student joins, in one small line.
+// The teacher's home has three areas (tabs): the students, the teacher's own area
+// (templates) and the settings (invite code, account).
 export default function TeacherHome() {
   const { state } = useAuth()
   if (state.status !== 'ready') return null
@@ -82,16 +83,33 @@ export default function TeacherHome() {
   return (
     <Screen title={`שלום, ${profile.name}`} top>
       {pending ? (
-        <PendingTeacher />
+        <>
+          <PendingTeacher />
+          <HomeFooter />
+        </>
       ) : (
         <>
+          <TeacherTabs />
           <StudentsList />
-          <Link to="/teacher/templates" className="flex min-h-12 items-center justify-center rounded-2xl bg-peach px-4 py-3 text-lg font-medium">
-            התבניות שלי
-          </Link>
-          {profile.inviteCode && <InviteCodeCard code={profile.inviteCode} />}
         </>
       )}
+    </Screen>
+  )
+}
+
+// Wraps a teacher area: only an approved teacher gets in.
+function useApprovedTeacher() {
+  const { state } = useAuth()
+  return state.status === 'ready' && state.profile.teacherStatus === 'approved' ? state : null
+}
+
+export function TeacherSettings() {
+  const ready = useApprovedTeacher()
+  if (!ready) return <Navigate to="/teacher" replace />
+  return (
+    <Screen title="הגדרות" top>
+      <TeacherTabs />
+      {ready.profile.inviteCode && <InviteCodeCard code={ready.profile.inviteCode} />}
       <HomeFooter />
     </Screen>
   )

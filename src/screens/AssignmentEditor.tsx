@@ -21,7 +21,7 @@ import {
   type ItemDraft,
 } from '@/lib/assignments'
 import { checkSheetFile, copySheet, deleteSheet, sheetProblemMessage, uploadSheet } from '@/lib/sheetFiles'
-import { listTemplates, loadTemplate, saveAsTemplate, type Template } from '@/lib/templates'
+import { listTemplates, loadTemplate, saveAsTemplate, updateTemplate, type Template } from '@/lib/templates'
 import { weekChoices, weekLabel, weekStartOf } from '@/lib/weeks'
 
 const emptyItem = (): ItemDraft => ({ title: '', notes: '', youtube: '', bpm: '', hasRecording: false })
@@ -31,13 +31,19 @@ const selectClass =
 
 // The teacher writes a weekly assignment for one student (or edits one): a title,
 // a description, a daily goal and up to 10 practice items.
-export default function AssignmentEditor() {
-  const { studentId = '', assignmentId } = useParams()
+export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assignment' | 'template' }) {
+  const { studentId = '', assignmentId, templateId } = useParams()
+  const isTemplate = mode === 'template'
   const { state } = useAuth()
   const navigate = useNavigate()
   const teacherUid = state.status === 'ready' ? state.user.uid : null
-  const editing = assignmentId !== undefined
-  const back = `/teacher/student/${studentId}`
+  const editing = isTemplate ? templateId !== undefined : assignmentId !== undefined
+  const back = isTemplate
+    ? editing
+      ? `/teacher/area/template/${templateId}`
+      : '/teacher/area'
+    : `/teacher/student/${studentId}`
+  const backLabel = isTemplate ? (editing ? 'לתבנית' : 'לאיזור המורה') : 'לתלמיד/ה'
 
   const [draft, setDraft] = useState<AssignmentDraft>(() => ({
     title: '',
@@ -59,7 +65,28 @@ export default function AssignmentEditor() {
   const [keys, setKeys] = useState<string[]>(() => [crypto.randomUUID()])
 
   useEffect(() => {
-    if (!editing || !assignmentId) return
+    if (!editing || !isTemplate || !templateId) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const content = await loadTemplate(templateId, true)
+        if (cancelled) return
+        if (!content) return setLoadError('התבנית לא נמצאה.')
+        setGoalText(String(content.dailyGoalMinutes))
+        setDraft((d) => ({ ...d, title: content.title, description: content.description, dailyGoalMinutes: content.dailyGoalMinutes, items: content.items }))
+        setKeys(content.items.map(() => crypto.randomUUID()))
+        setLoaded(true)
+      } catch {
+        if (!cancelled) setLoadError('לא הצלחנו לטעון את התבנית. אפשר לנסות שוב.')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [editing, isTemplate, templateId])
+
+  useEffect(() => {
+    if (!editing || isTemplate || !assignmentId) return
     let cancelled = false
     void (async () => {
       try {
@@ -86,10 +113,10 @@ export default function AssignmentEditor() {
     return () => {
       cancelled = true
     }
-  }, [editing, assignmentId, studentId])
+  }, [editing, isTemplate, assignmentId, studentId])
 
   useEffect(() => {
-    if (editing || !teacherUid) return
+    if (editing || isTemplate || !teacherUid) return
     let cancelled = false
     listTemplates(teacherUid)
       .then((list) => {
@@ -101,7 +128,7 @@ export default function AssignmentEditor() {
     return () => {
       cancelled = true
     }
-  }, [editing, teacherUid])
+  }, [editing, isTemplate, teacherUid])
 
   async function applyTemplate(id: string) {
     if (!id) return
@@ -193,6 +220,29 @@ export default function AssignmentEditor() {
     setBusy(true)
     setError(null)
     setTemplateSaved(false)
+    if (isTemplate) {
+      const newFiles: string[] = []
+      try {
+        if (editing && templateId) {
+          const uploadedPaths: (string | undefined)[] = []
+          for (const item of full.items) {
+            const path = item.newSheet ? await uploadSheet(teacherUid, item.newSheet) : undefined
+            if (path) newFiles.push(path)
+            uploadedPaths.push(path)
+          }
+          await updateTemplate(templateId, full, uploadedPaths)
+        } else {
+          await saveAsTemplate(teacherUid, full)
+        }
+      } catch {
+        await Promise.all(newFiles.map(deleteSheet))
+        setError('לא הצלחנו לשמור. אפשר לנסות שוב.')
+        setBusy(false)
+        return
+      }
+      navigate(back, { replace: true })
+      return
+    }
     const uploaded: (string | undefined)[] = []
     try {
       for (const item of full.items) {
@@ -219,7 +269,7 @@ export default function AssignmentEditor() {
 
   if (loadError) {
     return (
-      <Screen title="מטלה" top backTo={back}>
+      <Screen title={isTemplate ? 'תבנית' : 'מטלה'} top backTo={back}>
         <ErrorNote message={loadError} />
       </Screen>
     )
@@ -237,7 +287,12 @@ export default function AssignmentEditor() {
   if (!choices.some((c) => c.getTime() === draft.weekStart.getTime())) choices.unshift(draft.weekStart)
 
   return (
-    <Screen title={editing ? 'עריכת מטלה' : 'מטלה חדשה'} top backTo={back} backLabel="לתלמיד/ה">
+    <Screen
+      title={isTemplate ? (editing ? 'עריכת תבנית' : 'תבנית חדשה') : editing ? 'עריכת מטלה' : 'מטלה חדשה'}
+      top
+      backTo={back}
+      backLabel={backLabel}
+    >
       <form
         className="flex flex-col gap-6"
         onSubmit={(e) => {
@@ -245,7 +300,7 @@ export default function AssignmentEditor() {
           void save()
         }}
       >
-        {!editing && templates.length > 0 && (
+        {!editing && !isTemplate && templates.length > 0 && (
           <div className="flex flex-col gap-2 rounded-2xl bg-sky p-3">
             <Label htmlFor="template">להתחיל מתבנית (לא חובה)</Label>
             <select id="template" className={selectClass} defaultValue="" onChange={(e) => void applyTemplate(e.target.value)}>
@@ -280,7 +335,7 @@ export default function AssignmentEditor() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className={isTemplate ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-2 gap-3'}>
           <div className="flex flex-col gap-2">
             <Label htmlFor="goal">יעד יומי (דקות)</Label>
             <Input
@@ -290,6 +345,7 @@ export default function AssignmentEditor() {
               onChange={(e) => setGoalText(e.target.value.replace(/\D/g, '').slice(0, 3))}
             />
           </div>
+          {!isTemplate && (
           <div className="flex flex-col gap-2">
             <Label htmlFor="week">לאיזה שבוע</Label>
             <select
@@ -305,6 +361,7 @@ export default function AssignmentEditor() {
               ))}
             </select>
           </div>
+          )}
         </div>
 
         <section aria-labelledby="items-title" className="flex flex-col gap-4">
@@ -396,12 +453,14 @@ export default function AssignmentEditor() {
         <Button type="submit" size="large" disabled={busy}>
           {busy ? 'שומרים...' : 'שמירה'}
         </Button>
-        <Button type="button" variant="outline" disabled={busy} onClick={() => void saveTemplate()}>
-          שמירה כתבנית
-        </Button>
+        {!isTemplate && (
+          <Button type="button" variant="outline" disabled={busy} onClick={() => void saveTemplate()}>
+            שמירה כתבנית
+          </Button>
+        )}
         {templateSaved && (
           <p role="status" className="rounded-2xl bg-sage px-4 py-3 text-center text-base">
-            ✓ נשמרה כתבנית. אפשר למצוא אותה ב״התבניות שלי״ ובמטלה חדשה.
+            ✓ נשמרה כתבנית. היא ב״איזור המורה שלי״.
           </p>
         )}
       </form>

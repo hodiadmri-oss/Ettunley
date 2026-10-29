@@ -141,7 +141,13 @@ export function StudentsList() {
           התלמידים שלי ({approved.length})
         </h2>
         {rows !== null && approved.length === 0 && (
-          <p className="text-ink/60">עדיין אין תלמידים. אפשר לשלוח להם את הקוד שלמעלה.</p>
+          <p className="text-ink/60">
+            עדיין אין תלמידים. הקוד להצטרפות נמצא ב
+            <Link to="/teacher/settings" className="underline">
+              הגדרות
+            </Link>
+            .
+          </p>
         )}
         {approved.map((row) => (
           <Link
