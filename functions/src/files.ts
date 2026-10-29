@@ -8,6 +8,8 @@ const bucket = () => getStorage().bucket(STORAGE_BUCKET)
 
 const MAX_FILES_LISTED = 200
 const MAX_USES_SHOWN = 5
+// The item fields that point to a file in the teacher's folder.
+const FILE_FIELDS = ['sheetPath', 'accompanimentPath'] as const
 const SHEET_PATH = /^sheet-music\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9._-]{1,200}$/
 
 // A teacher deletes one of their own assignments, for a student who is still theirs.
@@ -33,7 +35,7 @@ export const deleteAssignment = onCall(async (request) => {
   const items = await ref.collection('items').get()
   const ownFolder = `sheet-music/${teacherId}/`
   const sheets = items.docs
-    .map((d) => d.data().sheetPath)
+    .flatMap((d) => [d.data().sheetPath, d.data().accompanimentPath])
     .filter((p): p is string => typeof p === 'string' && p.startsWith(ownFolder))
 
   // Files first: if something fails the assignment still exists and the teacher can retry.
@@ -58,12 +60,14 @@ export const adminListFiles = onCall(async (request) => {
   const out = []
   for (const file of files) {
     const uses: FileUse[] = []
-    const items = await db.collectionGroup('items').where('sheetPath', '==', file.name).limit(MAX_USES_SHOWN).get()
-    for (const item of items.docs) {
-      const parent = item.ref.parent.parent
-      const data = parent ? (await parent.get()).data() : undefined
-      if (parent && data) {
-        uses.push({ kind: parent.parent.id === 'templates' ? 'template' : 'assignment', title: String(data.title ?? '') })
+    for (const field of FILE_FIELDS) {
+      const items = await db.collectionGroup('items').where(field, '==', file.name).limit(MAX_USES_SHOWN).get()
+      for (const item of items.docs) {
+        const parent = item.ref.parent.parent
+        const data = parent ? (await parent.get()).data() : undefined
+        if (parent && data) {
+          uses.push({ kind: parent.parent.id === 'templates' ? 'template' : 'assignment', title: String(data.title ?? '') })
+        }
       }
     }
     out.push({
@@ -89,9 +93,13 @@ export const adminRemoveFile = onCall(async (request) => {
   }
   const db = getFirestore()
   await bucket().file(path).delete({ ignoreNotFound: true })
-  const items = await db.collectionGroup('items').where('sheetPath', '==', path).get()
-  for (const item of items.docs) await item.ref.update({ sheetPath: FieldValue.delete() })
-  return { status: 'removed', cleared: items.size }
+  let cleared = 0
+  for (const field of FILE_FIELDS) {
+    const items = await db.collectionGroup('items').where(field, '==', path).get()
+    for (const item of items.docs) await item.ref.update({ [field]: FieldValue.delete() })
+    cleared += items.size
+  }
+  return { status: 'removed', cleared }
 })
 
 // The owner can look at a file a teacher uploaded (to check what is being shared with

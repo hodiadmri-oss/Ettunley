@@ -410,8 +410,15 @@ try {
   check('a wrong YouTube link is refused', (await danaPage.locator('[role=alert]').innerText()).includes('יוטיוב'))
   await danaPage.fill('input[aria-label="קישור ליוטיוב בפריט 1"]', 'https://youtu.be/dQw4w9WgXcQ?si=abc')
   await danaPage.fill('input[aria-label="מטרונום בפריט 1"]', '80')
-  await danaPage.setInputFiles('input[type=file]', { name: 'scale.png', mimeType: 'image/png', buffer: tinyPng })
+  await danaPage.setInputFiles('input[type=file][accept^="image"]', { name: 'scale.png', mimeType: 'image/png', buffer: tinyPng })
   await danaPage.waitForSelector('text=נבחר: scale.png')
+  // a half-second silent WAV, declared as an mp3 (the browser plays what it can decode)
+  const wav = Buffer.alloc(44 + 4000, 128)
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + 4000, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16)
+  wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(8000, 28)
+  wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(4000, 40)
+  await danaPage.setInputFiles('input[type=file][accept^="audio"]', { name: 'backing.mp3', mimeType: 'audio/mpeg', buffer: wav })
+  await danaPage.waitForSelector('text=נבחר: backing.mp3')
   await danaPage.click('button:has-text("+ הוספת פריט")')
   await danaPage.fill('input[aria-label="שם פריט 2"]', 'האטיוד')
   await shot(danaPage, '42-assignment-filled')
@@ -434,6 +441,91 @@ try {
   await noaPage.waitForSelector('img[alt="תווים"]')
   check('the sheet music image loads for the student (private file, her own sign-in)', await noaPage.$eval('img[alt="תווים"]', (img) => img.src.startsWith('blob:')))
   await shot(noaPage, '45-student-assignment-open')
+
+  // ---------- practice: timer, metronome, backing track, status ----------
+  const assignmentId = noaPage.url().split('/').pop()
+  const listDocs = async (path) => {
+    const r = await fetch(`${fsHost}/v1/projects/${PROJECT}/databases/(default)/documents/${path}?pageSize=50`, { headers: { Authorization: 'Bearer owner' } })
+    return (await r.json()).documents ?? []
+  }
+  await noaPage.waitForSelector('[aria-label="טיימר תרגול"]')
+  await noaPage.click('button:has-text("התחלתי לתרגל")')
+  await noaPage.waitForSelector('[data-testid=practice-clock]')
+  await noaPage.waitForTimeout(2500)
+  // the screen turns off: the app is hidden for 3 seconds, and those seconds do not count
+  await noaPage.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await noaPage.waitForTimeout(3000)
+  await noaPage.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await noaPage.waitForTimeout(1500)
+  const clockSeconds = async () => {
+    const [m, sec] = (await noaPage.locator('[data-testid=practice-clock]').innerText()).split(':').map(Number)
+    return m * 60 + sec
+  }
+  const counted = await clockSeconds()
+  check('the timer does not count the time the screen was off', counted >= 3 && counted <= 5, String(counted))
+  await noaPage.click('button:has-text("סיימתי")')
+  await noaPage.waitForSelector('text=תרגול קצר מ-10 שניות לא נשמר')
+  check('a mis-tap (under 10 seconds) is not saved', (await listDocs('practiceLogs')).length === 0)
+
+  await noaPage.click('button:has-text("התחלתי לתרגל")')
+  await noaPage.waitForTimeout(11500)
+  await noaPage.click('button:has-text("סיימתי")')
+  await noaPage.waitForSelector('text=✓ נשמר:')
+  const logs = await listDocs('practiceLogs')
+  const log = logs[0]?.fields
+  check('a practice session is saved with seconds, for this student, teacher and assignment', logs.length === 1 && Number(log.seconds.integerValue) >= 11 && log.studentId.stringValue === noaUid && log.assignmentId.stringValue === assignmentId, JSON.stringify(log))
+  await shot(noaPage, '51-practice-saved')
+
+  // an unfinished session (the app was closed) is offered the next time
+  await noaPage.evaluate(([uid, aid]) => {
+    const now = Date.now()
+    localStorage.setItem('etunley-practice-session', JSON.stringify({ uid, assignmentId: aid, state: { startedAt: now - 400000, accumulatedMs: 300000, runningSince: null, savedAt: now - 60000 } }))
+  }, [noaUid, assignmentId])
+  await noaPage.reload()
+  await noaPage.waitForSelector('text=היה תרגול שלא הסתיים: 5 דקות')
+  await noaPage.click('button:has-text("כן, לשמור")')
+  await noaPage.waitForSelector('text=✓ נשמר: 5 דקות')
+  check('an unfinished practice session can be saved', (await listDocs('practiceLogs')).length === 2)
+
+  // the metronome shows the teacher tempo, the student can change it
+  const firstItem = noaPage.locator('article').first()
+  await firstItem.locator('text=המורה ביקשה: 80').waitFor()
+  check('the metronome starts at the teacher tempo', (await firstItem.locator('[aria-label="פעימות בדקה"]').innerText()) === '80')
+  await firstItem.locator('[aria-label="להאיץ ב-5"]').click()
+  check('the student can change the tempo', (await firstItem.locator('[aria-label="פעימות בדקה"]').innerText()) === '85')
+  await firstItem.locator('text=חזרה לקצב של המורה (80)').click()
+  check('and go back to the teacher tempo', (await firstItem.locator('[aria-label="פעימות בדקה"]').innerText()) === '80')
+  const secondItem = noaPage.locator('article').nth(1)
+  check('an item without a tempo gets a metronome at 60 and no reminder', (await secondItem.locator('[aria-label="פעימות בדקה"]').innerText()) === '60' && (await secondItem.locator('text=המורה ביקשה').count()) === 0)
+
+  // backing track and metronome never play together
+  await firstItem.locator('button:has-text("ניגון הליווי")').click()
+  await firstItem.locator('button:has-text("■ עצירה")').waitFor()
+  check('the backing track plays and can be stopped', true)
+  await firstItem.locator('button:has-text("הפעלת המטרונום")').click()
+  await firstItem.locator('button:has-text("עצירת המטרונום")').waitFor()
+  await firstItem.locator('button:has-text("ניגון הליווי")').waitFor()
+  check('starting the metronome stops the backing track', true)
+  await firstItem.locator('button:has-text("עצירת המטרונום")').click()
+  await firstItem.locator('button:has-text("הפעלת המטרונום")').waitFor()
+
+  // status per item
+  check('every item starts as "working on it"', (await firstItem.locator('button[aria-pressed=true]').innerText()) === 'עובד/ת על זה')
+  await firstItem.locator('button:has-text("מוכן!")').click()
+  await firstItem.locator('button[aria-pressed=true]:has-text("מוכן!")').waitFor()
+  await noaPage.waitForTimeout(500)
+  const itemDocs = await listDocs(`assignments/${assignmentId}/items`)
+  check('the status is saved on the item', itemDocs.some((d) => d.fields.status.stringValue === 'ready'))
+  await noaPage.reload()
+  await noaPage.locator('article').first().locator('button[aria-pressed=true]:has-text("מוכן!")').waitFor()
+  check('and is still there after a reload', true)
+  await shot(noaPage, '52-student-item-controls')
 
   // the teacher edits it
   await danaPage.click('a:has-text("סולם סול מז׳ור")')
@@ -486,7 +578,8 @@ try {
   await noaPage.waitForSelector('text=לאט, עם מטרונום')
   await noaPage.click('button:has-text("הצגת התווים")')
   await noaPage.waitForSelector('img[alt="תווים"]')
-  check('the student sees it, with its own copy of the sheet music', true)
+  await noaPage.locator('button:has-text("ניגון הליווי")').first().waitFor()
+  check('the student sees it, with its own copy of the sheet music and the backing track', true)
 
   // editing the template keeps what was not changed
   await danaPage.goto(`${BASE}/teacher/area`)
@@ -541,9 +634,12 @@ try {
   await owner.click('article:has-text("דנה המורה") button[aria-expanded]')
   await owner.waitForSelector('text=scale.png')
   check('opening a teacher lists her connected students', (await owner.locator('article:has-text("דנה המורה")').innerText()).includes('נועה כהן'))
-  await owner.click('article:has-text("דנה המורה") div.bg-white >> text=הצגת הקובץ >> nth=0')
+  await owner.click('article:has-text("דנה המורה") div.bg-white:has-text("scale.png") >> text=הצגת הקובץ >> nth=0')
   await owner.waitForSelector('img[alt="הקובץ שהמורה העלתה"]')
   check('the owner can look at an uploaded file', true)
+  await owner.click('article:has-text("דנה המורה") div.bg-white:has-text("backing.mp3") >> text=הצגת הקובץ >> nth=0')
+  await owner.waitForSelector('audio[controls]')
+  check('and listen to an uploaded backing track', true)
   const fileRows = owner.locator('article:has-text("דנה המורה") div.bg-white')
   const filesBefore = await fileRows.count()
   check('the owner sees the teacher files with their original names and where they are used', filesBefore >= 2 && (await owner.locator('article:has-text("דנה המורה")').innerText()).includes('בשימוש: מטלה'))

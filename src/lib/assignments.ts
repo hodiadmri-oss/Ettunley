@@ -36,8 +36,10 @@ export interface Item {
   title: string
   notes: string
   sheetPath?: string
+  accompanimentPath?: string
   youtubeUrl?: string
   metronomeBpm?: number
+  status: 'working' | 'ready'
   hasRecording: boolean
 }
 
@@ -52,7 +54,16 @@ export interface ItemDraft {
   newSheet?: File
   /** Sheet music of a template: copied when the assignment is saved. */
   copySheetFrom?: string
+  accompanimentPath?: string
+  newAccompaniment?: File
+  copyAccompanimentFrom?: string
   hasRecording: boolean
+}
+
+// The storage paths of one item's files, after they were uploaded or copied.
+export interface ItemFiles {
+  sheet?: string
+  accompaniment?: string
 }
 
 export interface AssignmentDraft {
@@ -103,6 +114,8 @@ export async function listItems(assignmentId: string): Promise<Item[]> {
       title: String(x.title ?? ''),
       notes: String(x.notes ?? ''),
       sheetPath: typeof x.sheetPath === 'string' ? x.sheetPath : undefined,
+      accompanimentPath: typeof x.accompanimentPath === 'string' ? x.accompanimentPath : undefined,
+      status: x.status === 'ready' ? 'ready' : 'working',
       youtubeUrl: typeof x.youtubeUrl === 'string' ? x.youtubeUrl : undefined,
       metronomeBpm: typeof x.metronomeBpm === 'number' ? x.metronomeBpm : undefined,
       hasRecording: x.recording !== undefined,
@@ -118,6 +131,7 @@ export function itemToDraft(item: Item): ItemDraft {
     youtube: item.youtubeUrl ?? '',
     bpm: item.metronomeBpm ? String(item.metronomeBpm) : '',
     sheetPath: item.sheetPath,
+    accompanimentPath: item.accompanimentPath,
     hasRecording: item.hasRecording,
   }
 }
@@ -158,7 +172,7 @@ export function draftProblemMessage(problem: DraftProblem): string {
 
 // The stored fields of one item. Optional parts that are empty are left out
 // (or removed, when editing).
-function itemFields(draft: ItemDraft, position: number, sheetPath: string | undefined) {
+function itemFields(draft: ItemDraft, position: number, sheetPath: string | undefined, accompanimentPath: string | undefined) {
   const youtube = draft.youtube.trim() ? normalizeYoutubeUrl(draft.youtube) : null
   const bpm = draft.bpm.trim() ? Number(draft.bpm) : null
   return {
@@ -166,6 +180,7 @@ function itemFields(draft: ItemDraft, position: number, sheetPath: string | unde
     title: draft.title.trim(),
     notes: draft.notes.trim() || null,
     sheetPath: sheetPath ?? null,
+    accompanimentPath: accompanimentPath ?? null,
     youtubeUrl: youtube,
     metronomeBpm: bpm,
   }
@@ -177,6 +192,7 @@ function forCreate(fields: Fields) {
   const out: Record<string, unknown> = { position: fields.position, title: fields.title, status: 'working' }
   if (fields.notes !== null) out.notes = fields.notes
   if (fields.sheetPath !== null) out.sheetPath = fields.sheetPath
+  if (fields.accompanimentPath !== null) out.accompanimentPath = fields.accompanimentPath
   if (fields.youtubeUrl !== null) out.youtubeUrl = fields.youtubeUrl
   if (fields.metronomeBpm !== null) out.metronomeBpm = fields.metronomeBpm
   return out
@@ -188,6 +204,7 @@ function forUpdate(fields: Fields) {
     title: fields.title,
     notes: fields.notes ?? deleteField(),
     sheetPath: fields.sheetPath ?? deleteField(),
+    accompanimentPath: fields.accompanimentPath ?? deleteField(),
     youtubeUrl: fields.youtubeUrl ?? deleteField(),
     metronomeBpm: fields.metronomeBpm ?? deleteField(),
   }
@@ -207,7 +224,7 @@ export async function createAssignment(
   teacherId: string,
   studentId: string,
   draft: AssignmentDraft,
-  uploaded: (string | undefined)[],
+  uploaded: ItemFiles[],
 ): Promise<string> {
   const description = draft.description.trim()
   const ref = await addDoc(collection(db, 'assignments'), {
@@ -224,7 +241,7 @@ export async function createAssignment(
 export async function updateAssignment(
   id: string,
   draft: AssignmentDraft,
-  uploaded: (string | undefined)[],
+  uploaded: ItemFiles[],
   existing: Item[],
 ): Promise<void> {
   const batch = writeBatch(db)
@@ -236,15 +253,15 @@ export async function updateAssignment(
   await writeItems(id, draft, uploaded, existing)
 }
 
-// `uploaded[i]` is the storage path of a newly uploaded sheet for draft item i.
-async function writeItems(assignmentId: string, draft: AssignmentDraft, uploaded: (string | undefined)[], existing: Item[]) {
+// `uploaded[i]` holds the storage paths of the files newly uploaded (or copied) for draft item i.
+async function writeItems(assignmentId: string, draft: AssignmentDraft, uploaded: ItemFiles[], existing: Item[]) {
   const batch = writeBatch(db)
   const keep = new Set(draft.items.map((i) => i.id).filter(Boolean))
   for (const old of existing) {
     if (!keep.has(old.id)) batch.delete(doc(db, 'assignments', assignmentId, 'items', old.id))
   }
   draft.items.forEach((item, position) => {
-    const fields = itemFields(item, position, uploaded[position] ?? item.sheetPath)
+    const fields = itemFields(item, position, uploaded[position]?.sheet ?? item.sheetPath, uploaded[position]?.accompaniment ?? item.accompanimentPath)
     if (item.id) batch.update(doc(db, 'assignments', assignmentId, 'items', item.id), forUpdate(fields))
     else batch.set(doc(collection(db, 'assignments', assignmentId, 'items')), forCreate(fields))
   })

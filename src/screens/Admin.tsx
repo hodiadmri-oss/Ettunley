@@ -123,7 +123,7 @@ function DeleteByRequest() {
 // A file the teacher uploaded, shown through the owner's own sign-in (never a public link).
 function FilePreview({ path }: { path: string }) {
   const [state, setState] = useState<'idle' | 'loading' | 'error' | 'big' | 'unsupported'>('idle')
-  const [url, setUrl] = useState<{ href: string; image: boolean } | null>(null)
+  const [url, setUrl] = useState<{ href: string; kind: 'image' | 'audio' | 'pdf' } | null>(null)
 
   useEffect(
     () => () => {
@@ -137,16 +137,32 @@ function FilePreview({ path }: { path: string }) {
     try {
       const file = await readTeacherFile(path)
       const bytes = Uint8Array.from(atob(file.dataBase64), (c) => c.charCodeAt(0))
-      const image = /^image\/(jpeg|png|webp|gif)$/.test(file.contentType)
-      if (!image && file.contentType !== 'application/pdf') return setState('unsupported')
-      setUrl({ href: URL.createObjectURL(new Blob([bytes], { type: file.contentType })), image })
+      const kind = /^image\/(jpeg|png|webp|gif)$/.test(file.contentType)
+        ? 'image'
+        : file.contentType === 'audio/mpeg'
+          ? 'audio'
+          : file.contentType === 'application/pdf'
+            ? 'pdf'
+            : null
+      if (!kind) return setState('unsupported')
+      setUrl({ href: URL.createObjectURL(new Blob([bytes], { type: file.contentType })), kind })
       setState('idle')
     } catch (error) {
       setState((error as { code?: string }).code === 'functions/failed-precondition' ? 'big' : 'error')
     }
   }
 
-  if (url?.image) {
+  if (url?.kind === 'audio') {
+    return (
+      <div className="flex flex-col gap-1">
+        <audio controls src={url.href} className="w-full" />
+        <button type="button" className="self-start text-sm underline" onClick={() => setUrl(null)}>
+          הסתרה
+        </button>
+      </div>
+    )
+  }
+  if (url?.kind === 'image') {
     return (
       <div className="flex flex-col gap-1">
         <img src={url.href} alt="הקובץ שהמורה העלתה" className="w-full rounded-xl border border-ink/10 bg-white" />

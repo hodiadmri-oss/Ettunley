@@ -74,6 +74,8 @@ as small as possible:
 
 - **Decision (owner, October 2026):** a student sees only assignments of their *current* teacher. Those of a previous teacher stay stored (the student's own data, readable by the student by the rules) but are not shown in the app. Later phases (practice, streak, "new reply" badge) must apply the same filter.
 
+- **Done in phase 3:** practice logs hold seconds, must be believable (at least 10 s, not in the future, not older than a week, never longer than the session itself) and cannot be edited or deleted. A running timer is kept in the browser's storage only as ids and times, and removed on sign-out. Backing tracks are mp3 only (20 MB) in the teacher's private folder, shown to the student only through her own sign-in; the owner can listen to them in `/admin` and remove them.
+
 ### Phases 3–4 (practice, recording)
 - Microphone rules from section 1. Replace/discard flow exactly as in `CLAUDE.md`.
 - Check the file really is audio on the server (Storage "finalize" function: magic bytes, size) because the declared type is client-chosen.

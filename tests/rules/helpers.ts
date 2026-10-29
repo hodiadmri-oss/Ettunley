@@ -121,11 +121,11 @@ export async function seed(env: RulesTestEnvironment) {
     })
     await put('practiceLogs/lR', {
       studentId: 'removedStudent', teacherId: 'teacherA', assignmentId: 'aR',
-      minutes: 10, startedAt: now(), endedAt: now(),
+      seconds: 600, startedAt: now(), endedAt: now(),
     })
     await put('practiceLogs/l1', {
       studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1',
-      minutes: 10, startedAt: now(), endedAt: now(),
+      seconds: 600, startedAt: now(), endedAt: now(),
     })
 
     await put('templates/t1', {

@@ -341,7 +341,7 @@ service cloud.firestore {
 
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(
-             ['studentId', 'teacherId', 'assignmentId', 'minutes', 'startedAt', 'endedAt'])
+             ['studentId', 'teacherId', 'assignmentId', 'seconds', 'startedAt', 'endedAt'])
         && request.resource.data.studentId == request.auth.uid
         && exists(userPath(request.auth.uid))
         && userDoc(request.auth.uid).role == 'student'
@@ -349,18 +349,20 @@ service cloud.firestore {
         && request.resource.data.teacherId == userDoc(request.auth.uid).teacherId
         && isPlainId(request.resource.data.assignmentId)
         && assignmentDoc(request.resource.data.assignmentId).studentId == request.auth.uid
-        && request.resource.data.minutes is int
-        && request.resource.data.minutes >= 1
-        && request.resource.data.minutes <= 600
+        // Seconds of real practice (the timer pauses when the screen is off). Under
+        // 10 seconds is a mis-tap; over 10 hours is not believable.
+        && request.resource.data.seconds is int
+        && request.resource.data.seconds >= 10
+        && request.resource.data.seconds <= 36000
         && request.resource.data.startedAt is timestamp
         && request.resource.data.endedAt is timestamp
         // The times must be believable: not in the future (5 min clock
-        // tolerance), not older than a week, and long enough for the minutes.
+        // tolerance), not older than a week, and long enough for the seconds.
         && request.resource.data.endedAt <= request.time + duration.value(5, 'm')
         && request.resource.data.endedAt >= request.time - duration.value(7, 'd')
         && request.resource.data.startedAt <= request.resource.data.endedAt
-        && request.resource.data.minutes * 60000
-             <= request.resource.data.endedAt.toMillis() - request.resource.data.startedAt.toMillis() + 60000;
+        && request.resource.data.seconds * 1000
+             <= request.resource.data.endedAt.toMillis() - request.resource.data.startedAt.toMillis() + 5000;
 
       allow update, delete: if false;
     }

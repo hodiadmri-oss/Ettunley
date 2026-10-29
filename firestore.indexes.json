@@ -3,6 +3,20 @@
   "fieldOverrides": [
     {
       "collectionGroup": "items",
+      "fieldPath": "accompanimentPath",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "items",
       "fieldPath": "sheetPath",
       "indexes": [
         {

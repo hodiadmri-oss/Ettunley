@@ -19,7 +19,7 @@ set -euo pipefail
 PROJECT="ettunley-61749"
 BUCKET="$PROJECT.firebasestorage.app"
 # Functions that changed since the last published version (used by "update").
-UPDATE_FUNCTIONS="adminReadFile,adminListStudents"
+UPDATE_FUNCTIONS="deleteAssignment,adminListFiles,adminRemoveFile"
 MODE="${1:-full}"
 cd "$(dirname "$0")/.."
 

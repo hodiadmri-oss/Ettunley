@@ -88,7 +88,7 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 - The teacher replies to a recording with short text.
 - **Copyright statement:** a teacher ticks "אני מצהיר/ת שיש לי זכות להשתמש בחומרים שאעלה, ואני אחראי/ת לתוכן שלהם" **once**, when they ask for approval (the time is stored; the owner cannot approve without it). It is not repeated at each upload (owner decision, October 2026). The terms say the teacher is responsible and that the owner may remove any file; the owner can do that from `/admin`. Files stay private to the teacher and their confirmed students.
 - The teacher can save an assignment as a **template** and copy it to other students or other weeks.
-- Accompaniment player: play/stop only. Metronome: uses the item's BPM.
+- Accompaniment player: play/stop only. Metronome: starts at the item's BPM, shown to the student as a reminder ("המורה ביקשה: 75"); **the student can change the tempo** (owner decision, October 2026). Metronome and backing track never play together. The practice timer is one per assignment (the practice of all its items adds up), counts only while the app is on screen, and saves sessions of 10 seconds or more. The teacher's free-text tips for an item are the item's `notes`.
 
 ## Data model (Firestore)
 
@@ -100,7 +100,7 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 | `assignments/{id}` | teacherId, studentId, title, description, dailyGoalMinutes, weekStart, createdAt |
 | `assignments/{id}/items/{itemId}` | position, title, notes (the teacher's practice tips, text), sheetPath, accompanimentPath, youtubeUrl, metronomeBpm, status (working/ready), statusUpdatedAt, recording { path, durationSeconds, uploadedAt } |
 | `assignments/{id}/items/{itemId}/comments/{commentId}` | authorId, text, createdAt, readAt (for the "חדש" badge) |
-| `practiceLogs/{id}` | studentId, teacherId, assignmentId, minutes, startedAt, endedAt |
+| `practiceLogs/{id}` | studentId, teacherId, assignmentId, seconds (real practice time, 10–36000), startedAt, endedAt |
 | `templates/{id}` | teacherId, title, description, dailyGoalMinutes, createdAt |
 | `templates/{id}/items/{itemId}` | position, title, notes, sheetPath, accompanimentPath, youtubeUrl, metronomeBpm |
 

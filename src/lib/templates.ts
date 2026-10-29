@@ -14,8 +14,9 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { createAssignment, MAX_ITEMS, type AssignmentDraft, type ItemDraft } from '@/lib/assignments'
-import { copySheet, deleteSheet, uploadSheet, type SheetCache } from '@/lib/sheetFiles'
+import { createAssignment, MAX_ITEMS, type AssignmentDraft, type ItemDraft, type ItemFiles } from '@/lib/assignments'
+import { createdPaths, prepareItemFiles } from '@/lib/itemFiles'
+import { deleteSheet, type SheetCache } from '@/lib/sheetFiles'
 import { normalizeYoutubeUrl } from '@/lib/youtube'
 
 const MAX_TEMPLATES_LISTED = 50
@@ -73,6 +74,11 @@ export async function loadTemplate(id: string, forEdit = false): Promise<Templat
         bpm: typeof i.metronomeBpm === 'number' ? String(i.metronomeBpm) : '',
         // Editing a template keeps its own files; a new assignment copies them.
         ...(typeof i.sheetPath === 'string' ? (forEdit ? { sheetPath: i.sheetPath } : { copySheetFrom: i.sheetPath }) : {}),
+        ...(typeof i.accompanimentPath === 'string'
+          ? forEdit
+            ? { accompanimentPath: i.accompanimentPath }
+            : { copyAccompanimentFrom: i.accompanimentPath }
+          : {}),
         hasRecording: false,
       }
     }),
@@ -82,14 +88,8 @@ export async function loadTemplate(id: string, forEdit = false): Promise<Templat
 // Saves what is on screen as a template. Sheet music is copied, so changing or removing
 // the file in the assignment later does not touch the template.
 export async function saveAsTemplate(teacherId: string, draft: AssignmentDraft): Promise<void> {
-  const copies: (string | undefined)[] = []
+  const files = await prepareItemFiles(teacherId, draft.items, { copyExisting: true })
   try {
-    for (const item of draft.items) {
-      const source = item.sheetPath ?? item.copySheetFrom
-      copies.push(
-        item.newSheet ? await uploadSheet(teacherId, item.newSheet) : source ? await copySheet(teacherId, source) : undefined,
-      )
-    }
     const description = draft.description.trim()
     const ref = await addDoc(collection(db, 'templates'), {
       teacherId,
@@ -103,14 +103,15 @@ export async function saveAsTemplate(teacherId: string, draft: AssignmentDraft):
       const youtube = item.youtube.trim() ? normalizeYoutubeUrl(item.youtube) : null
       const fields: Record<string, unknown> = { position, title: item.title.trim() }
       if (item.notes.trim()) fields.notes = item.notes.trim()
-      if (copies[position]) fields.sheetPath = copies[position]
+      if (files[position].sheet) fields.sheetPath = files[position].sheet
+      if (files[position].accompaniment) fields.accompanimentPath = files[position].accompaniment
       if (youtube) fields.youtubeUrl = youtube
       if (item.bpm.trim()) fields.metronomeBpm = Number(item.bpm)
       batch.set(doc(collection(db, 'templates', ref.id, 'items')), fields)
     })
     await batch.commit()
   } catch (error) {
-    await Promise.all(copies.filter((p): p is string => Boolean(p)).map(deleteSheet))
+    await Promise.all(createdPaths(files).map(deleteSheet))
     throw error
   }
 }
@@ -118,7 +119,9 @@ export async function saveAsTemplate(teacherId: string, draft: AssignmentDraft):
 // Items first, then the template itself, then the template's own copies of the files.
 export async function deleteTemplate(id: string): Promise<void> {
   const items = await getDocs(query(collection(db, 'templates', id, 'items'), limit(MAX_ITEMS)))
-  const paths = items.docs.map((d) => d.data().sheetPath).filter((p): p is string => typeof p === 'string')
+  const paths = items.docs
+    .flatMap((d) => [d.data().sheetPath, d.data().accompanimentPath])
+    .filter((p): p is string => typeof p === 'string')
   const batch = writeBatch(db)
   items.docs.forEach((d) => batch.delete(d.ref))
   await batch.commit()
@@ -131,9 +134,11 @@ export async function deleteTemplate(id: string): Promise<void> {
 // Editing a template: the template's fields are updated and its items are replaced.
 // `uploaded[i]` is the path of a newly uploaded sheet for item i; files that are no longer
 // used are removed afterwards.
-export async function updateTemplate(id: string, draft: AssignmentDraft, uploaded: (string | undefined)[]): Promise<void> {
+export async function updateTemplate(id: string, draft: AssignmentDraft, uploaded: ItemFiles[]): Promise<void> {
   const old = await getDocs(query(collection(db, 'templates', id, 'items'), limit(MAX_ITEMS)))
-  const oldPaths = old.docs.map((d) => d.data().sheetPath).filter((p): p is string => typeof p === 'string')
+  const oldPaths = old.docs
+    .flatMap((d) => [d.data().sheetPath, d.data().accompanimentPath])
+    .filter((p): p is string => typeof p === 'string')
   const description = draft.description.trim()
   const head = writeBatch(db)
   head.update(doc(db, 'templates', id), {
@@ -148,12 +153,17 @@ export async function updateTemplate(id: string, draft: AssignmentDraft, uploade
   old.docs.forEach((d) => batch.delete(d.ref))
   draft.items.forEach((item, position) => {
     const youtube = item.youtube.trim() ? normalizeYoutubeUrl(item.youtube) : null
-    const sheet = uploaded[position] ?? item.sheetPath
+    const sheet = uploaded[position]?.sheet ?? item.sheetPath
+    const accompaniment = uploaded[position]?.accompaniment ?? item.accompanimentPath
     const fields: Record<string, unknown> = { position, title: item.title.trim() }
     if (item.notes.trim()) fields.notes = item.notes.trim()
     if (sheet) {
       fields.sheetPath = sheet
       keptPaths.push(sheet)
+    }
+    if (accompaniment) {
+      fields.accompanimentPath = accompaniment
+      keptPaths.push(accompaniment)
     }
     if (youtube) fields.youtubeUrl = youtube
     if (item.bpm.trim()) fields.metronomeBpm = Number(item.bpm)
@@ -179,22 +189,24 @@ export async function assignTemplate(
   const cache: SheetCache = new Map()
   const result: AssignResult = { done: [], failed: [] }
   for (const student of students) {
-    const copies: (string | undefined)[] = []
+    let files: ItemFiles[] = []
     try {
-      for (const item of content.items) {
-        copies.push(item.copySheetFrom ? await copySheet(teacherUid, item.copySheetFrom, cache) : undefined)
-      }
+      files = await prepareItemFiles(teacherUid, content.items, { cache })
       const draft: AssignmentDraft = {
         title: content.title,
         description: content.description,
         dailyGoalMinutes: content.dailyGoalMinutes,
         weekStart,
-        items: content.items.map((i) => ({ ...i, copySheetFrom: undefined })),
+        items: content.items.map((i) => ({ ...i, copySheetFrom: undefined, copyAccompanimentFrom: undefined })),
       }
-      await createAssignment(teacherUid, student.uid, draft, copies)
+      try {
+        await createAssignment(teacherUid, student.uid, draft, files)
+      } catch (error) {
+        await Promise.all(createdPaths(files).map(deleteSheet))
+        throw error
+      }
       result.done.push(student.name)
     } catch {
-      await Promise.all(copies.filter((p): p is string => Boolean(p)).map(deleteSheet))
       result.failed.push(student.name)
     }
   }

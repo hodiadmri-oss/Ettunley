@@ -31,19 +31,21 @@ async function world() {
   const aid = `fa${n}`
   const sheet = `sheet-music/${T}/sheet${n}`
   const tplSheet = `sheet-music/${T}/tplsheet${n}`
+  const backing = `sheet-music/${T}/backing${n}`
   await adminBucket().file(sheet).save(Buffer.from('x'), { contentType: 'application/pdf', metadata: { metadata: { name: 'scale.pdf' } } })
+  await adminBucket().file(backing).save(Buffer.from('mp3'), { contentType: 'audio/mpeg', metadata: { metadata: { name: 'backing.mp3' } } })
   await adminBucket().file(tplSheet).save(Buffer.from('xy'), { contentType: 'image/png', metadata: { metadata: { name: 'tpl.png' } } })
   await db.doc(`assignments/${aid}`).set({ teacherId: T, studentId: S, title: 'מטלה למחיקה', dailyGoalMinutes: 10, createdAt: now })
   await db.doc(`assignments/${aid}/items/i1`).set({
-    position: 0, title: 'פריט', status: 'working', sheetPath: sheet,
+    position: 0, title: 'פריט', status: 'working', sheetPath: sheet, accompanimentPath: backing,
     recording: { path: `recordings/${S}/${aid}/i1`, durationSeconds: 5, uploadedAt: now },
   })
   await db.doc(`assignments/${aid}/items/i1/comments/c1`).set({ authorId: T, text: 'יפה', createdAt: now, readAt: null })
   await putFile(`recordings/${S}/${aid}/i1`)
-  await db.doc(`practiceLogs/fl${n}`).set({ studentId: S, teacherId: T, assignmentId: aid, minutes: 10, startedAt: now, endedAt: now })
+  await db.doc(`practiceLogs/fl${n}`).set({ studentId: S, teacherId: T, assignmentId: aid, seconds: 600, startedAt: now, endedAt: now })
   await db.doc(`templates/ft${n}`).set({ teacherId: T, title: 'תבנית', dailyGoalMinutes: 10, createdAt: now })
   await db.doc(`templates/ft${n}/items/ti1`).set({ position: 0, title: 'סולם', sheetPath: tplSheet })
-  return { n, aid, T, S, teacher, student, sheet, tplSheet }
+  return { n, aid, T, S, teacher, student, sheet, tplSheet, backing }
 }
 
 describe('deleteAssignment', () => {
@@ -54,6 +56,7 @@ describe('deleteAssignment', () => {
     expect(await docExists(`assignments/${w.aid}/items/i1`)).toBe(false)
     expect(await docExists(`assignments/${w.aid}/items/i1/comments/c1`)).toBe(false)
     expect(await fileExists(w.sheet)).toBe(false)
+    expect(await fileExists(w.backing)).toBe(false)
     expect(await fileExists(`recordings/${w.S}/${w.aid}/i1`)).toBe(false)
     expect(await docExists(`practiceLogs/fl${w.n}`)).toBe(true)
     // the template and its file are not touched
@@ -92,6 +95,7 @@ describe('adminListFiles / adminRemoveFile', () => {
     }
     const byPath = new Map(result.files.map((f) => [f.path, f]))
     expect(byPath.get(w.sheet)).toMatchObject({ name: 'scale.pdf', size: 1, uses: [{ kind: 'assignment', title: 'מטלה למחיקה' }] })
+    expect(byPath.get(w.backing)).toMatchObject({ name: 'backing.mp3', uses: [{ kind: 'assignment', title: 'מטלה למחיקה' }] })
     expect(byPath.get(w.tplSheet)).toMatchObject({ name: 'tpl.png', size: 2, uses: [{ kind: 'template', title: 'תבנית' }] })
   })
 
@@ -102,6 +106,10 @@ describe('adminListFiles / adminRemoveFile', () => {
     const item = await docData(`assignments/${w.aid}/items/i1`)
     expect(item).toBeDefined()
     expect('sheetPath' in (item as object)).toBe(false)
+    expect(item?.accompanimentPath).toBe(w.backing)
+    // removing the backing track clears that field too
+    expect(await callAs(admin, 'adminRemoveFile', { path: w.backing })).toEqual({ status: 'removed', cleared: 1 })
+    expect('accompanimentPath' in ((await docData(`assignments/${w.aid}/items/i1`)) as object)).toBe(false)
     expect(item?.title).toBe('פריט')
     // the other file is untouched
     expect(await fileExists(w.tplSheet)).toBe(true)

@@ -13,6 +13,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react'
 import { auth } from '@/lib/firebase'
 import { authErrorMessage } from '@/lib/authErrors'
+import { clearSession } from '@/lib/practice'
 import { cleanName, createProfile, loadProfile, type Profile, type Role } from './profile'
 
 export type AuthState =
@@ -162,7 +163,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profile = await loadProfile(user.uid)
         if (profile) setState({ status: 'ready', user, profile, isAdmin: await hasAdminClaim(user) })
       },
-      signOut: () => run(() => firebaseSignOut(auth)),
+      signOut: () =>
+        run(async () => {
+          clearSession()
+          await firebaseSignOut(auth)
+        }),
     }),
     [state, error, run],
   )

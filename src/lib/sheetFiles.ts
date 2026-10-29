@@ -7,6 +7,19 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'im
 
 export type SheetProblem = 'type' | 'size'
 
+// Backing tracks: mp3 only, up to 20 MB (some systems call an mp3 "audio/mp3").
+const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/mp3']
+
+export function checkAudioFile(file: File): SheetProblem | null {
+  if (!ALLOWED_AUDIO_TYPES.includes(file.type)) return 'type'
+  if (file.size > MAX_SHEET_BYTES) return 'size'
+  return null
+}
+
+export function audioProblemMessage(problem: SheetProblem): string {
+  return problem === 'type' ? 'אפשר להעלות קובץ mp3 בלבד.' : 'הקובץ גדול מדי. אפשר עד 20MB.'
+}
+
 export function checkSheetFile(file: File): SheetProblem | null {
   if (!ALLOWED_TYPES.includes(file.type)) return 'type'
   if (file.size > MAX_SHEET_BYTES) return 'size'
@@ -23,7 +36,8 @@ export function sheetProblemMessage(problem: SheetProblem): string {
 export async function uploadSheet(teacherUid: string, file: File): Promise<string> {
   const path = `sheet-music/${teacherUid}/${crypto.randomUUID()}`
   // The original name is kept in the file's data so the owner can recognise it in /admin.
-  await uploadBytes(ref(storage, path), file, { contentType: file.type, customMetadata: { name: file.name.slice(0, 100) } })
+  const contentType = file.type === 'audio/mp3' ? 'audio/mpeg' : file.type
+  await uploadBytes(ref(storage, path), file, { contentType, customMetadata: { name: file.name.slice(0, 100) } })
   return path
 }
 

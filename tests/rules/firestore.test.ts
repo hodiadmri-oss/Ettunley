@@ -837,7 +837,7 @@ describe('comments (teacher replies)', () => {
 describe('practiceLogs', () => {
   const log = (over: Record<string, unknown> = {}) => ({
     studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1',
-    minutes: 12, startedAt: Timestamp.fromMillis(Date.now() - 13 * 60000),
+    seconds: 720, startedAt: Timestamp.fromMillis(Date.now() - 13 * 60000),
     endedAt: Timestamp.fromMillis(Date.now() - 60000), ...over,
   })
 
@@ -866,9 +866,15 @@ describe('practiceLogs', () => {
     await assertFails(setDoc(doc(as(ids.adultA), 'practiceLogs/new'), log({ teacherId: 'teacherB' })))
   })
 
-  it('rejects zero or absurd minutes', async () => {
-    await assertFails(setDoc(doc(as(ids.adultA), 'practiceLogs/new'), log({ minutes: 0 })))
-    await assertFails(setDoc(doc(as(ids.adultA), 'practiceLogs/new'), log({ minutes: 5000 })))
+  it('rejects a mis-tap (under 10 seconds) and absurd lengths, but accepts short practice', async () => {
+    const short = (seconds: number) => ({ seconds, startedAt: Timestamp.fromMillis(Date.now() - 60000), endedAt: Timestamp.now() })
+    await assertFails(setDoc(doc(as(ids.adultA), 'practiceLogs/new'), log(short(0))))
+    await assertFails(setDoc(doc(as(ids.adultA), 'practiceLogs/new'), log(short(9))))
+    await assertSucceeds(setDoc(doc(as(ids.adultA), 'practiceLogs/new'), log(short(10))))
+    await assertSucceeds(setDoc(doc(as(ids.adultA), 'practiceLogs/new2'), log(short(40))))
+    await assertFails(setDoc(doc(as(ids.adultA), 'practiceLogs/new3'), log({ seconds: 36001 })))
+    await assertFails(setDoc(doc(as(ids.adultA), 'practiceLogs/new4'), log({ seconds: 12.5 })))
+    await assertFails(setDoc(doc(as(ids.adultA), 'practiceLogs/new5'), { ...log(), minutes: 5 }))
   })
 
   it('an unlinked student cannot log practice', async () => {
@@ -913,7 +919,7 @@ describe('practiceLogs', () => {
   })
 
   it('logs cannot be edited or deleted', async () => {
-    await assertFails(updateDoc(doc(as(ids.adultA), 'practiceLogs/l1'), { minutes: 600 }))
+    await assertFails(updateDoc(doc(as(ids.adultA), 'practiceLogs/l1'), { seconds: 3600 }))
     await assertFails(deleteDoc(doc(as(ids.adultA), 'practiceLogs/l1')))
   })
 })
@@ -1046,7 +1052,7 @@ describe('security hardening', () => {
     )
     await assertFails(
       setDoc(doc(as(ids.adultA), 'practiceLogs/new'), {
-        studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1/items/i1', minutes: 5,
+        studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1/items/i1', seconds: 300,
         startedAt: Timestamp.now(), endedAt: Timestamp.now(),
       }),
     )
@@ -1056,7 +1062,7 @@ describe('security hardening', () => {
     const minutesAgo = (m: number) => Timestamp.fromMillis(Date.now() - m * 60000)
     const log = (over: Record<string, unknown>) => ({
       studentId: 'adultA', teacherId: 'teacherA', assignmentId: 'a1',
-      minutes: 10, startedAt: minutesAgo(11), endedAt: minutesAgo(1), ...over,
+      seconds: 600, startedAt: minutesAgo(11), endedAt: minutesAgo(1), ...over,
     })
     const write = (data: object) => setDoc(doc(as(ids.adultA), 'practiceLogs/new'), data)
 
@@ -1064,8 +1070,9 @@ describe('security hardening', () => {
       await assertSucceeds(write(log({})))
     })
 
-    it('cannot claim more minutes than the session lasted', async () => {
-      await assertFails(write(log({ minutes: 60 })))
+    it('cannot claim more seconds than the session lasted', async () => {
+      await assertFails(write(log({ seconds: 3600 })))
+      await assertFails(write(log({ seconds: 606 })))
     })
 
     it('cannot end in the future', async () => {

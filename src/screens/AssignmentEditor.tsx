@@ -20,8 +20,10 @@ import {
   type AssignmentDraft,
   type Item,
   type ItemDraft,
+  type ItemFiles,
 } from '@/lib/assignments'
-import { checkSheetFile, copySheet, deleteSheet, sheetProblemMessage, uploadSheet } from '@/lib/sheetFiles'
+import { createdPaths, prepareItemFiles } from '@/lib/itemFiles'
+import { audioProblemMessage, checkAudioFile, checkSheetFile, deleteSheet, sheetProblemMessage } from '@/lib/sheetFiles'
 import { listTemplates, loadTemplate, saveAsTemplate, updateTemplate, type Template } from '@/lib/templates'
 import { weekChoices, weekLabel, weekStartOf } from '@/lib/weeks'
 
@@ -29,6 +31,57 @@ const emptyItem = (): ItemDraft => ({ title: '', notes: '', youtube: '', bpm: ''
 
 const selectClass =
   'min-h-12 w-full rounded-2xl border border-ink/20 bg-white px-4 py-3 text-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink'
+
+// One optional file of an item (sheet music, backing track): shows what is attached and lets
+// the teacher choose, replace or remove it.
+function FilePicker({
+  hint,
+  haveText,
+  accept,
+  chosen,
+  has,
+  onPick,
+  onClear,
+}: {
+  hint: string
+  haveText: string
+  accept: string
+  chosen: File | undefined
+  has: boolean
+  onPick: (file: File | undefined) => void
+  onClear: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {has ? (
+        <p className="rounded-2xl bg-sage px-3 py-2 text-base">✓ {chosen ? `נבחר: ${chosen.name}` : haveText}</p>
+      ) : (
+        <p className="text-sm text-ink/60">{hint}</p>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <Button asChild variant="soft">
+          <label>
+            {has ? 'החלפת קובץ' : 'בחירת קובץ'}
+            <input
+              type="file"
+              accept={accept}
+              className="sr-only"
+              onChange={(e) => {
+                onPick(e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+          </label>
+        </Button>
+        {has && (
+          <Button type="button" variant="outline" onClick={onClear}>
+            הסרת הקובץ
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // The teacher writes a weekly assignment for one student (or edits one): a title,
 // a description, a daily goal and up to 10 practice items.
@@ -161,8 +214,8 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
   }
 
   function removeItem(index: number) {
-    const old = draft.items[index].sheetPath
-    if (old) setObsolete((o) => [...o, old])
+    const old = [draft.items[index].sheetPath, draft.items[index].accompanimentPath].filter((p): p is string => Boolean(p))
+    if (old.length > 0) setObsolete((o) => [...o, ...old])
     setDraft((d) => ({ ...d, items: d.items.filter((_, i) => i !== index) }))
     setKeys((k) => k.filter((_, i) => i !== index))
   }
@@ -184,6 +237,25 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
     const old = draft.items[index].sheetPath
     if (old) setObsolete((o) => [...o, old])
     setItem(index, { newSheet: undefined, sheetPath: undefined, copySheetFrom: undefined })
+  }
+
+  function pickAccompaniment(index: number, file: File | undefined) {
+    if (!file) return
+    const problem = checkAudioFile(file)
+    if (problem) {
+      setError(audioProblemMessage(problem))
+      return
+    }
+    setError(null)
+    const old = draft.items[index].accompanimentPath
+    if (old) setObsolete((o) => [...o, old])
+    setItem(index, { newAccompaniment: file, accompanimentPath: undefined, copyAccompanimentFrom: undefined })
+  }
+
+  function clearAccompaniment(index: number) {
+    const old = draft.items[index].accompanimentPath
+    if (old) setObsolete((o) => [...o, old])
+    setItem(index, { newAccompaniment: undefined, accompanimentPath: undefined, copyAccompanimentFrom: undefined })
   }
 
   // The form as a draft, or null (with the error shown) when something is missing.
@@ -235,50 +307,25 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
     setBusy(true)
     setError(null)
     setTemplateSaved(false)
-    if (isTemplate) {
-      const newFiles: string[] = []
-      try {
-        if (editing && templateId) {
-          const uploadedPaths: (string | undefined)[] = []
-          for (const item of full.items) {
-            const path = item.newSheet ? await uploadSheet(teacherUid, item.newSheet) : undefined
-            if (path) newFiles.push(path)
-            uploadedPaths.push(path)
-          }
-          await updateTemplate(templateId, full, uploadedPaths)
-        } else {
-          await saveAsTemplate(teacherUid, full)
-        }
-      } catch {
-        await Promise.all(newFiles.map(deleteSheet))
-        setError('לא הצלחנו לשמור. אפשר לנסות שוב.')
-        setBusy(false)
-        return
-      }
-      navigate(back, { replace: true })
-      return
-    }
-    const uploaded: (string | undefined)[] = []
+    let files: ItemFiles[] = []
     try {
-      for (const item of full.items) {
-        uploaded.push(
-          item.newSheet
-            ? await uploadSheet(teacherUid, item.newSheet)
-            : item.copySheetFrom
-              ? await copySheet(teacherUid, item.copySheetFrom)
-              : undefined,
-        )
+      if (isTemplate && !editing) {
+        await saveAsTemplate(teacherUid, full)
+      } else {
+        files = await prepareItemFiles(teacherUid, full.items)
+        if (isTemplate && templateId) await updateTemplate(templateId, full, files)
+        else if (editing && assignmentId) await updateAssignment(assignmentId, full, files, existing)
+        else await createAssignment(teacherUid, studentId, full, files)
       }
-      if (editing && assignmentId) await updateAssignment(assignmentId, full, uploaded, existing)
-      else await createAssignment(teacherUid, studentId, full, uploaded)
     } catch {
       // Files that were uploaded but are not referenced by anything are removed again.
-      await Promise.all(uploaded.filter((p): p is string => Boolean(p)).map(deleteSheet))
+      await Promise.all(createdPaths(files).map(deleteSheet))
       setError('לא הצלחנו לשמור. אפשר לנסות שוב.')
       setBusy(false)
       return
     }
-    await Promise.all(obsolete.map(deleteSheet))
+    // A template removes the files it no longer uses itself.
+    if (!isTemplate) await Promise.all(obsolete.map(deleteSheet))
     navigate(back, { replace: true })
   }
 
@@ -417,36 +464,24 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
                 onChange={(e) => setItem(index, { bpm: e.target.value.replace(/\D/g, '').slice(0, 3) })}
               />
 
-              <div className="flex flex-col gap-2">
-                {item.newSheet || item.sheetPath || item.copySheetFrom ? (
-                  <p className="rounded-2xl bg-sage px-3 py-2 text-base">
-                    ✓ {item.newSheet ? `נבחר: ${item.newSheet.name}` : 'יש קובץ תווים'}
-                  </p>
-                ) : (
-                  <p className="text-sm text-ink/60">תווים (תמונה או PDF, לא חובה)</p>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <Button asChild variant="soft">
-                    <label>
-                      {item.newSheet || item.sheetPath || item.copySheetFrom ? 'החלפת קובץ' : 'בחירת קובץ'}
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        className="sr-only"
-                        onChange={(e) => {
-                          pickSheet(index, e.target.files?.[0])
-                          e.target.value = ''
-                        }}
-                      />
-                    </label>
-                  </Button>
-                  {(item.newSheet || item.sheetPath || item.copySheetFrom) && (
-                    <Button type="button" variant="outline" onClick={() => clearSheet(index)}>
-                      הסרת הקובץ
-                    </Button>
-                  )}
-                </div>
-              </div>
+              <FilePicker
+                hint="תווים (תמונה או PDF, לא חובה)"
+                haveText="יש קובץ תווים"
+                accept="image/*,application/pdf"
+                chosen={item.newSheet}
+                has={Boolean(item.newSheet || item.sheetPath || item.copySheetFrom)}
+                onPick={(file) => pickSheet(index, file)}
+                onClear={() => clearSheet(index)}
+              />
+              <FilePicker
+                hint="קובץ ליווי (mp3, לא חובה)"
+                haveText="יש קובץ ליווי"
+                accept="audio/mpeg,.mp3"
+                chosen={item.newAccompaniment}
+                has={Boolean(item.newAccompaniment || item.accompanimentPath || item.copyAccompanimentFrom)}
+                onPick={(file) => pickAccompaniment(index, file)}
+                onClear={() => clearAccompaniment(index)}
+              />
 
               {item.hasRecording ? (
                 <p className="text-sm text-ink/60">אי אפשר להסיר פריט שכבר יש לו הקלטה.</p>

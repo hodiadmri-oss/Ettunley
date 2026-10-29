@@ -59,7 +59,7 @@ async function buildWorld() {
     await db.doc(`assignments/${aid}/items/i1/comments/c1`).set({ authorId: T, text: 'יפה', createdAt: now, readAt: null })
     await putFile(`recordings/${student}/${aid}/i1`)
     await db.doc(`practiceLogs/log${key}${n}`).set({
-      studentId: student, teacherId: T, assignmentId: aid, minutes: 10, startedAt: now, endedAt: now,
+      studentId: student, teacherId: T, assignmentId: aid, seconds: 600, startedAt: now, endedAt: now,
     })
   }
 
@@ -70,7 +70,7 @@ async function buildWorld() {
   await db.doc(`users/${bystander.uid}`).set({ role: 'student', name: 'עומד מהצד', isMinor: false, teacherId: other.uid, linkStatus: 'approved', createdAt: now })
   await db.doc(`assignments/b${n}`).set({ teacherId: other.uid, studentId: bystander.uid, title: 'של אחרים', dailyGoalMinutes: 5, createdAt: now })
   await db.doc(`assignments/b${n}/items/i1`).set({ position: 1, title: 'x', status: 'working' })
-  await db.doc(`practiceLogs/logb${n}`).set({ studentId: bystander.uid, teacherId: other.uid, assignmentId: `b${n}`, minutes: 5, startedAt: now, endedAt: now })
+  await db.doc(`practiceLogs/logb${n}`).set({ studentId: bystander.uid, teacherId: other.uid, assignmentId: `b${n}`, seconds: 300, startedAt: now, endedAt: now })
   await putFile(`recordings/${bystander.uid}/b${n}/i1`)
   await putFile(`sheet-music/${other.uid}/theirs.pdf`, 'application/pdf')
 
