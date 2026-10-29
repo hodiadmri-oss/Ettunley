@@ -24,3 +24,24 @@ export async function approveTeacher(uid: string): Promise<void> {
 export async function rejectTeacher(uid: string): Promise<void> {
   await httpsCallable(functions, 'rejectTeacher')({ uid })
 }
+
+export interface AdminFile {
+  path: string
+  name: string
+  size: number
+  contentType: string
+  uploadedAt: number | null
+  uses: { kind: 'assignment' | 'template'; title: string }[]
+}
+
+export async function listTeacherFiles(teacherUid: string): Promise<{ files: AdminFile[]; truncated: boolean }> {
+  const result = await httpsCallable<{ teacherUid: string }, { files: AdminFile[]; truncated: boolean }>(
+    functions,
+    'adminListFiles',
+  )({ teacherUid })
+  return result.data
+}
+
+export async function removeTeacherFile(path: string): Promise<void> {
+  await httpsCallable(functions, 'adminRemoveFile')({ path })
+}

@@ -1,4 +1,4 @@
-import { deleteObject, getBlob, ref, uploadBytes } from 'firebase/storage'
+import { deleteObject, getBlob, getMetadata, ref, uploadBytes } from 'firebase/storage'
 import { storage } from '@/lib/firebase'
 
 // Sheet music: images or PDF, up to 20 MB (the same limits as the storage rules).
@@ -22,7 +22,8 @@ export function sheetProblemMessage(problem: SheetProblem): string {
 // Files live in the teacher's own folder under a random name.
 export async function uploadSheet(teacherUid: string, file: File): Promise<string> {
   const path = `sheet-music/${teacherUid}/${crypto.randomUUID()}`
-  await uploadBytes(ref(storage, path), file, { contentType: file.type })
+  // The original name is kept in the file's data so the owner can recognise it in /admin.
+  await uploadBytes(ref(storage, path), file, { contentType: file.type, customMetadata: { name: file.name.slice(0, 100) } })
   return path
 }
 
@@ -41,16 +42,22 @@ export async function loadSheet(path: string): Promise<Blob> {
   return getBlob(ref(storage, path))
 }
 
+export type SheetCache = Map<string, { blob: Blob; name: string }>
+
 // A private copy of a file, in the teacher's own folder (used for templates, so that every
 // assignment and template owns its files). Returns the new path. When many copies of the
 // same file are made in a row, pass the same `cache` so the file is downloaded only once.
-export async function copySheet(teacherUid: string, fromPath: string, cache?: Map<string, Blob>): Promise<string> {
-  let blob = cache?.get(fromPath)
-  if (!blob) {
-    blob = await loadSheet(fromPath)
-    cache?.set(fromPath, blob)
+export async function copySheet(teacherUid: string, fromPath: string, cache?: SheetCache): Promise<string> {
+  let source = cache?.get(fromPath)
+  if (!source) {
+    const [blob, meta] = await Promise.all([loadSheet(fromPath), getMetadata(ref(storage, fromPath))])
+    source = { blob, name: meta.customMetadata?.name ?? '' }
+    cache?.set(fromPath, source)
   }
   const path = `sheet-music/${teacherUid}/${crypto.randomUUID()}`
-  await uploadBytes(ref(storage, path), blob, { contentType: blob.type })
+  await uploadBytes(ref(storage, path), source.blob, {
+    contentType: source.blob.type,
+    ...(source.name ? { customMetadata: { name: source.name } } : {}),
+  })
   return path
 }

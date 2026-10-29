@@ -534,6 +534,38 @@ try {
   await noaPage.waitForSelector('img[alt="תווים"]')
   check('assignments made from the deleted template keep their sheet music', true)
 
+  // ---------- the owner removes a file ----------
+  await owner.goto(`${BASE}/admin`)
+  await owner.waitForSelector('article:has-text("דנה המורה")')
+  check('the approved teacher shows how many students are connected', (await owner.locator('article:has-text("דנה המורה")').innerText()).includes('תלמידים מחוברים: 1'))
+  await owner.click('article:has-text("דנה המורה") >> text=קבצים שהמורה העלתה')
+  await owner.waitForSelector('text=scale.png')
+  const fileRows = owner.locator('article:has-text("דנה המורה") div.bg-white')
+  const filesBefore = await fileRows.count()
+  check('the owner sees the teacher files with their original names and where they are used', filesBefore >= 2 && (await owner.locator('article:has-text("דנה המורה")').innerText()).includes('בשימוש: מטלה'))
+  await shot(owner, '49-admin-files')
+  await owner.locator('article:has-text("דנה המורה") div.bg-white:has-text("בשימוש: מטלה") >> text=הסרת הקובץ').first().click()
+  await owner.click('button:has-text("כן, להסיר")')
+  await owner.waitForFunction((n) => document.querySelectorAll('article div.bg-white').length === n, filesBefore - 1)
+  check('removing a file takes it off the list', true)
+
+  // ---------- the teacher deletes an assignment ----------
+  await danaPage.goto(`${BASE}/teacher`)
+  await danaPage.click('a:has-text("נועה כהן")')
+  await danaPage.waitForSelector('h3:has-text("שבוע הבא")')
+  await danaPage.click('section:has(h3:has-text("שבוע הבא")) a')
+  await danaPage.waitForSelector('text=עריכת מטלה')
+  await danaPage.click('text=מחיקת המטלה')
+  await danaPage.waitForSelector('text=למחוק את המטלה?')
+  await shot(danaPage, '50-delete-assignment')
+  await danaPage.click('button:has-text("כן, למחוק")')
+  await danaPage.waitForSelector('text=מטלה חדשה')
+  await danaPage.waitForFunction(() => !document.querySelector('h3')?.textContent?.includes('שבוע הבא'))
+  check('the deleted assignment is gone from the teacher list', (await danaPage.locator('h3:has-text("שבוע הבא")').count()) === 0)
+  await noaPage.goto(`${BASE}/student`)
+  await noaPage.waitForSelector('a:has-text("סולם סול מז׳ור ושיר")')
+  check('and from the student list', (await noaPage.locator('h3:has-text("שבוע הבא")').count()) === 0)
+
   // removing the student
   await danaPage.goto(`${BASE}/teacher`)
   await danaPage.click('a:has-text("נועה כהן")')

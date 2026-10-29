@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   createAssignment,
+  deleteAssignment,
   draftProblem,
   draftProblemMessage,
   getAssignment,
@@ -61,6 +62,7 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
   const [loadError, setLoadError] = useState<string | null>(null)
   const [templates, setTemplates] = useState<Template[]>([])
   const [templateSaved, setTemplateSaved] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   // Stable keys for the item cards (an item has no id until it is saved).
   const [keys, setKeys] = useState<string[]>(() => [crypto.randomUUID()])
 
@@ -209,6 +211,19 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
     } catch {
       setError('לא הצלחנו לשמור את התבנית. אפשר לנסות שוב.')
     } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeAssignment() {
+    if (!assignmentId) return
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteAssignment(assignmentId)
+      navigate(back, { replace: true })
+    } catch {
+      setError('המחיקה לא הצליחה. אפשר לנסות שוב.')
       setBusy(false)
     }
   }
@@ -457,6 +472,25 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
           <Button type="button" variant="outline" disabled={busy} onClick={() => void saveTemplate()}>
             שמירה כתבנית
           </Button>
+        )}
+        {editing && !isTemplate && (
+          confirmingDelete ? (
+            <div className="flex flex-col gap-2 rounded-2xl bg-peach p-3">
+              <p>למחוק את המטלה? כל מה שקשור אליה יימחק, כולל ההקלטות של התלמיד/ה בה. אי אפשר לבטל.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" disabled={busy} onClick={() => void removeAssignment()}>
+                  כן, למחוק
+                </Button>
+                <Button type="button" variant="outline" disabled={busy} onClick={() => setConfirmingDelete(false)}>
+                  ביטול
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="self-center py-3 text-base text-ink/70 underline" onClick={() => setConfirmingDelete(true)}>
+              מחיקת המטלה
+            </button>
+          )
         )}
         {templateSaved && (
           <p role="status" className="rounded-2xl bg-sage px-4 py-3 text-center text-base">

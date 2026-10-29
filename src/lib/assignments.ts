@@ -13,7 +13,8 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { normalizeYoutubeUrl } from '@/lib/youtube'
 
 export const MAX_ITEMS = 10
@@ -248,4 +249,9 @@ async function writeItems(assignmentId: string, draft: AssignmentDraft, uploaded
     else batch.set(doc(collection(db, 'assignments', assignmentId, 'items')), forCreate(fields))
   })
   await batch.commit()
+}
+
+// Deleting runs in a Cloud Function (the rules do not allow it from the app).
+export async function deleteAssignment(assignmentId: string): Promise<void> {
+  await httpsCallable(functions, 'deleteAssignment')({ assignmentId })
 }

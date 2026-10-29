@@ -19,7 +19,7 @@ set -euo pipefail
 PROJECT="ettunley-61749"
 BUCKET="$PROJECT.firebasestorage.app"
 # Functions that changed since the last published version (used by "update").
-UPDATE_FUNCTIONS="listTeachers"
+UPDATE_FUNCTIONS="deleteAssignment,adminListFiles,adminRemoveFile"
 MODE="${1:-full}"
 cd "$(dirname "$0")/.."
 
@@ -97,7 +97,7 @@ else
     "respondToStudent,removeStudent,regenerateInviteCode,cancelJoinRequest"
     "sendParentConsent,getParentConsentInfo,approveParentConsent,getParentManageInfo"
     "manageParentConsent,deleteMyAccount,adminLookupUser,adminDeleteUser"
-    "dailyRetention"
+    "deleteAssignment,adminListFiles,adminRemoveFile,dailyRetention"
   )
 fi
 for group in "${FUNCTION_GROUPS[@]}"; do
@@ -116,7 +116,8 @@ say "Letting the website call the functions (safe to repeat)"
 # who is calling. Google sometimes skips this step when many functions are created at once.
 for f in approveteacher listteachers rejectteacher jointeacher respondtostudent removestudent \
   regenerateinvitecode canceljoinrequest sendparentconsent getparentconsentinfo approveparentconsent \
-  getparentmanageinfo manageparentconsent deletemyaccount adminlookupuser admindeleteuser; do
+  getparentmanageinfo manageparentconsent deletemyaccount adminlookupuser admindeleteuser \
+  deleteassignment adminlistfiles adminremovefile; do
   gcloud run services add-iam-policy-binding "$f" --region=me-west1 --member=allUsers \
     --role=roles/run.invoker --project="$PROJECT" --quiet >/dev/null 2>&1 && echo "ok $f" || echo "skipped $f"
 done

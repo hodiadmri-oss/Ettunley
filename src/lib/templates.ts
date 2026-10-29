@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { createAssignment, MAX_ITEMS, type AssignmentDraft, type ItemDraft } from '@/lib/assignments'
-import { copySheet, deleteSheet, uploadSheet } from '@/lib/sheetFiles'
+import { copySheet, deleteSheet, uploadSheet, type SheetCache } from '@/lib/sheetFiles'
 import { normalizeYoutubeUrl } from '@/lib/youtube'
 
 const MAX_TEMPLATES_LISTED = 50
@@ -176,7 +176,7 @@ export async function assignTemplate(
   weekStart: Date,
   content: TemplateContent,
 ): Promise<AssignResult> {
-  const cache = new Map<string, Blob>()
+  const cache: SheetCache = new Map()
   const result: AssignResult = { done: [], failed: [] }
   for (const student of students) {
     const copies: (string | undefined)[] = []

@@ -15,4 +15,5 @@ export {
   sendParentConsent,
 } from './consent'
 export { adminDeleteUser, adminLookupUser, deleteMyAccount } from './accounts'
+export { adminListFiles, adminRemoveFile, deleteAssignment } from './files'
 export { dailyRetention } from './retention'

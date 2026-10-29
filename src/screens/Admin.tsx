@@ -6,7 +6,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DELETE_WORD, adminDeleteUser, adminLookupUser, type LookedUpUser } from '@/lib/accountApi'
-import { approveTeacher, listTeachers, rejectTeacher, type TeacherRow } from '@/lib/adminApi'
+import {
+  approveTeacher,
+  listTeacherFiles,
+  listTeachers,
+  rejectTeacher,
+  removeTeacherFile,
+  type AdminFile,
+  type TeacherRow,
+} from '@/lib/adminApi'
 
 type Action = { uid: string; kind: 'approve' | 'reject' }
 
@@ -100,6 +108,100 @@ function DeleteByRequest() {
         </div>
       )}
     </section>
+  )
+}
+
+const formatSize = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`)
+
+// The files one teacher uploaded; the owner can remove one (for example after a complaint).
+function TeacherFiles({ teacherUid }: { teacherUid: string }) {
+  const [files, setFiles] = useState<AdminFile[] | null>(null)
+  const [truncated, setTruncated] = useState(false)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setError(null)
+    try {
+      const result = await listTeacherFiles(teacherUid)
+      setFiles(result.files)
+      setTruncated(result.truncated)
+    } catch {
+      setError('לא הצלחנו לטעון את הקבצים. אפשר לנסות שוב.')
+    }
+  }, [teacherUid])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  async function remove(path: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      await removeTeacherFile(path)
+      setConfirming(null)
+      await load()
+    } catch {
+      setError('ההסרה לא הצליחה. אפשר לנסות שוב.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl bg-cream p-3">
+      <ErrorNote message={error} />
+      {files === null && !error && <p className="text-sm text-ink/60">רגע...</p>}
+      {files !== null && files.length === 0 && <p className="text-sm text-ink/60">אין קבצים.</p>}
+      {files?.map((file) => (
+        <div key={file.path} className="flex flex-col gap-1 rounded-xl bg-white p-3">
+          <p dir="auto" className="font-medium">{file.name || 'ללא שם'}</p>
+          <p className="text-sm text-ink/60">
+            {formatSize(file.size)} · {formatDate(file.uploadedAt)}
+          </p>
+          <p className="text-sm">
+            {file.uses.length === 0
+              ? 'לא בשימוש'
+              : `בשימוש: ${file.uses.map((u) => `${u.kind === 'template' ? 'תבנית' : 'מטלה'} ״${u.title}״`).join(', ')}`}
+          </p>
+          {confirming === file.path ? (
+            <div className="flex flex-col gap-2 rounded-xl bg-peach p-2">
+              <p className="text-sm">להסיר את הקובץ? הוא יימחק, והפריטים שהשתמשו בו יישארו בלי תווים.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button disabled={busy} onClick={() => void remove(file.path)}>
+                  כן, להסיר
+                </Button>
+                <Button variant="outline" disabled={busy} onClick={() => setConfirming(null)}>
+                  ביטול
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="self-start text-sm underline" onClick={() => setConfirming(file.path)}>
+              הסרת הקובץ
+            </button>
+          )}
+        </div>
+      ))}
+      {truncated && <p className="text-sm text-ink/60">מוצגים הקבצים האחרונים בלבד.</p>}
+    </div>
+  )
+}
+
+function ApprovedTeacher({ teacher }: { teacher: TeacherRow }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <article className="flex flex-col gap-2 rounded-3xl bg-white p-4 shadow-sm">
+      <p className="text-lg font-bold">{teacher.name}</p>
+      <p dir="ltr" className="text-start text-ink/70">{teacher.email}</p>
+      <p className="text-sm text-ink/70">תלמידים מחוברים: {teacher.studentCount}</p>
+      <button type="button" className="self-start text-sm underline" onClick={() => setOpen((v) => !v)}>
+        {open ? 'הסתרת הקבצים' : 'קבצים שהמורה העלתה'}
+      </button>
+      {open && <TeacherFiles teacherUid={teacher.uid} />}
+    </article>
   )
 }
 
@@ -209,11 +311,7 @@ export default function Admin() {
             </h2>
             {approved.length === 0 && <p className="text-ink/60">עדיין אין.</p>}
             {approved.map((t) => (
-              <article key={t.uid} className="rounded-3xl bg-white p-4 shadow-sm">
-                <p className="text-lg font-bold">{t.name}</p>
-                <p dir="ltr" className="text-start text-ink/70">{t.email}</p>
-                <p className="text-sm text-ink/70">תלמידים מחוברים: {t.studentCount}</p>
-              </article>
+              <ApprovedTeacher key={t.uid} teacher={t} />
             ))}
           </section>
         </>
