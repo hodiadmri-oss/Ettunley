@@ -48,7 +48,7 @@ const pickInstrumentAndLevel = async (page) => {
   await page.waitForFunction(() => document.querySelector('[role=radio][aria-checked=true]'))
 }
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] })
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] })
 const newPage = async () => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'he-IL', deviceScaleFactor: 2 })
   const page = await ctx.newPage()
@@ -393,7 +393,7 @@ try {
   const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64')
   await danaPage.goto(`${BASE}/teacher`)
   await danaPage.click('a:has-text("נועה כהן")')
-  await danaPage.waitForSelector('text=מטלה חדשה')
+  await danaPage.waitForSelector('text=עדיין אין מטלות')
   check('the student page invites a first assignment', await danaPage.locator('text=עדיין אין מטלות').count() === 1)
   await shot(danaPage, '40-teacher-student-page')
   await danaPage.click('a:has-text("מטלה חדשה")')
@@ -558,6 +558,89 @@ try {
   check('and is still there after a reload', true)
   await shot(noaPage, '52-student-item-controls')
 
+  // ---------- recording ----------
+  const itemPath = (id) => `assignments/${assignmentId}/items/${id}`
+  const itemDocs2 = await listDocs(`assignments/${assignmentId}/items`)
+  const firstItemId = itemDocs2.find((d) => d.fields.title.stringValue === 'הסולם').name.split('/').pop()
+  const secondItemId = itemDocs2.find((d) => d.fields.title.stringValue === 'האטיוד').name.split('/').pop()
+  const recordingOf = async (id) => (await listDocs(`assignments/${assignmentId}/items`)).find((d) => d.name.endsWith('/' + id))?.fields.recording?.mapValue.fields
+  const objectExists = async (path) => (await fetch(`http://127.0.0.1:9199/v0/b/${PROJECT}.firebasestorage.app/o/${encodeURIComponent(path)}`, { headers: { Authorization: 'Bearer owner' } })).status === 200
+  const rec = firstItem.locator('section[aria-label="הקלטה"]')
+  await rec.locator('button:has-text("● הקלטה")').waitFor()
+  check('every item has a record button', true)
+
+  // record with the metronome; the backing track cannot be played meanwhile
+  await rec.locator('input[type=checkbox]').check()
+  await rec.locator('button:has-text("● הקלטה")').click()
+  await rec.locator('[data-testid=recording-countdown]').waitFor()
+  check('a recording starts with a visible countdown from three minutes', /0[23]:[0-5]\d/.test(await rec.locator('[data-testid=recording-countdown]').innerText()))
+  await firstItem.locator('button:has-text("עצירת המטרונום")').waitFor()
+  check('"record with a metronome" starts the metronome', true)
+  check('the backing track cannot be played while recording', await firstItem.locator('button[aria-label="ניגון הליווי"]').isDisabled())
+  await noaPage.waitForTimeout(2500)
+  await rec.locator('button:has-text("■ עצירה")').click()
+  await rec.locator('audio').waitFor()
+  await firstItem.locator('button:has-text("הפעלת המטרונום")').waitFor()
+  check('stopping ends the metronome too, and the new recording can be heard before sending', true)
+  check('nothing was uploaded before the student taps send', (await recordingOf(firstItemId)) === undefined)
+  await rec.locator('button:has-text("שליחה למורה")').click()
+  await rec.locator('text=✓ נשלח למורה').waitFor()
+  const firstRecording = await recordingOf(firstItemId)
+  check('a recording is saved on the item and in storage', Boolean(firstRecording) && firstRecording.path.stringValue === `recordings/${noaUid}/${assignmentId}/${firstItemId}` && Number(firstRecording.durationSeconds.integerValue ?? firstRecording.durationSeconds.doubleValue) >= 2 && (await objectExists(firstRecording.path.stringValue)), JSON.stringify(firstRecording))
+  await noaPage.waitForTimeout(3500)
+  check('the server check keeps a real recording', Boolean(await recordingOf(firstItemId)) && (await objectExists(`recordings/${noaUid}/${assignmentId}/${firstItemId}`)))
+
+  // a second recording asks before replacing; cancelling keeps the old one
+  await rec.locator('button:has-text("● הקלטה חדשה")').click()
+  await rec.locator('[data-testid=recording-countdown]').waitFor()
+  await noaPage.waitForTimeout(1500)
+  await rec.locator('button:has-text("■ עצירה")').click()
+  await rec.locator('button:has-text("שליחה למורה")').click()
+  await rec.locator('text=כבר יש הקלטה לפריט הזה. להחליף אותה בהקלטה החדשה? ההקלטה הקודמת תימחק.').waitFor()
+  check('replacing asks for confirmation with the agreed text', true)
+  await rec.locator('button:has-text("לבטל")').click()
+  await noaPage.waitForTimeout(500)
+  check('cancelling keeps the old recording untouched', (await recordingOf(firstItemId)).uploadedAt.timestampValue === firstRecording.uploadedAt.timestampValue)
+  await rec.locator('button:has-text("● הקלטה חדשה")').click()
+  await rec.locator('[data-testid=recording-countdown]').waitFor()
+  await noaPage.waitForTimeout(1500)
+  await rec.locator('button:has-text("■ עצירה")').click()
+  await rec.locator('button:has-text("שליחה למורה")').click()
+  await rec.locator('button:has-text("להחליף")').click()
+  await rec.locator('text=✓ נשלח למורה').waitFor()
+  check('confirming replaces the recording', (await recordingOf(firstItemId)).uploadedAt.timestampValue !== firstRecording.uploadedAt.timestampValue)
+
+  // a second item: record, then delete with the small button
+  const rec2 = noaPage.locator('article').nth(1).locator('section[aria-label="הקלטה"]')
+  await rec2.locator('button:has-text("● הקלטה")').click()
+  await rec2.locator('[data-testid=recording-countdown]').waitFor()
+  await noaPage.waitForTimeout(1500)
+  await rec2.locator('button:has-text("■ עצירה")').click()
+  await rec2.locator('button:has-text("שליחה למורה")').click()
+  await rec2.locator('text=✓ נשלח למורה').waitFor()
+  await rec2.locator('button:has-text("מחיקת ההקלטה")').click()
+  await rec2.locator('button:has-text("כן, למחוק")').click()
+  await rec2.locator('text=למחוק את ההקלטה?').waitFor({ state: 'detached' })
+  await noaPage.waitForTimeout(500)
+  check('the student can delete a recording (the file and the mark)', (await recordingOf(secondItemId)) === undefined && !(await objectExists(`recordings/${noaUid}/${assignmentId}/${secondItemId}`)))
+  void itemPath
+  await shot(noaPage, '55-recording')
+
+  // a minor whose parent has not approved sees the lock instead of the record button
+  // (an adult without consent would be sent to onboarding, so the profile is made a minor for this check)
+  const patchProfile = (minor, consent) => fetch(`${fsHost}/v1/projects/${PROJECT}/databases/(default)/documents/users/${noaUid}?updateMask.fieldPaths=consentAt&updateMask.fieldPaths=isMinor`, {
+    method: 'PATCH', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { isMinor: { booleanValue: minor }, ...(consent ? { consentAt: { timestampValue: consent } } : {}) } }),
+  })
+  const consentBefore = (await profileOf(noaUid)).consentAt
+  await patchProfile(true, null)
+  await noaPage.reload()
+  await noaPage.waitForSelector('text=ההקלטות ייפתחו אחרי שההורה יאשר במייל')
+  check('without consent there is no record button, only the lock message', (await noaPage.locator('button:has-text("● הקלטה")').count()) === 0)
+  await patchProfile(false, consentBefore)
+  await noaPage.reload()
+  await noaPage.locator('button:has-text("● הקלטה")').first().waitFor()
+
   // the home list: status next to the title, practice time next to the daily goal
   await noaPage.goto(`${BASE}/student`)
   await noaPage.waitForSelector('[data-testid=assignment-status]')
@@ -610,6 +693,7 @@ try {
   check('the edit reaches the student: new title, one item removed', (await noaPage.locator('main').innerText()).includes('האטיוד') === false)
 
   // ---------- the teacher's area: templates ----------
+  check('the teacher list has a link under each assignment to see it as the student sees it', (await danaPage.locator('a:has-text("איך זה נראה אצל התלמיד/ה")').count()) >= 1)
   await danaPage.click('a:has-text("סולם סול מז׳ור ושיר")')
   await danaPage.waitForSelector('text=עריכת מטלה')
   await danaPage.click('button:has-text("שמירה כתבנית")')

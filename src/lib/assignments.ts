@@ -40,6 +40,8 @@ export interface Item {
   youtubeUrl?: string
   metronomeBpm?: number
   status: 'working' | 'ready'
+  /** The student's recording of this item, if there is one. */
+  recording?: { path: string; durationSeconds: number; uploadedAt: number | null }
   hasRecording: boolean
 }
 
@@ -118,6 +120,14 @@ export async function listItems(assignmentId: string): Promise<Item[]> {
       status: x.status === 'ready' ? 'ready' : 'working',
       youtubeUrl: typeof x.youtubeUrl === 'string' ? x.youtubeUrl : undefined,
       metronomeBpm: typeof x.metronomeBpm === 'number' ? x.metronomeBpm : undefined,
+      recording:
+        x.recording && typeof x.recording.path === 'string'
+          ? {
+              path: x.recording.path,
+              durationSeconds: Number(x.recording.durationSeconds ?? 0),
+              uploadedAt: (x.recording.uploadedAt as Timestamp | undefined)?.toMillis() ?? null,
+            }
+          : undefined,
       hasRecording: x.recording !== undefined,
     }
   })
@@ -271,4 +281,8 @@ async function writeItems(assignmentId: string, draft: AssignmentDraft, uploaded
 // Deleting runs in a Cloud Function (the rules do not allow it from the app).
 export async function deleteAssignment(assignmentId: string): Promise<void> {
   await httpsCallable(functions, 'deleteAssignment')({ assignmentId })
+}
+
+export async function deleteMyRecording(assignmentId: string, itemId: string): Promise<void> {
+  await httpsCallable(functions, 'deleteMyRecording')({ assignmentId, itemId })
 }

@@ -24,6 +24,24 @@ export function stopAllSound(): void {
   active?.stop()
 }
 
+// While a recording is being made the backing track cannot be played (the metronome can).
+let recording = false
+const listeners = new Set<() => void>()
+
+export function setRecordingActive(value: boolean): void {
+  recording = value
+  listeners.forEach((listener) => listener())
+}
+
+export function subscribeRecording(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+export function isRecordingActive(): boolean {
+  return recording
+}
+
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') stopAllSound()

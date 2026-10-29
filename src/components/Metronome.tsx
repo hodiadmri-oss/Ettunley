@@ -12,9 +12,19 @@ const TICK_MS = 25
 
 const clamp = (bpm: number) => Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(bpm)))
 
-// A metronome with a tempo the student can change. The teacher's tempo is shown next to it.
-export function Metronome({ id, teacherBpm }: { id: string; teacherBpm?: number }) {
-  const [bpm, setBpm] = useState(() => clamp(teacherBpm ?? DEFAULT_BPM))
+export interface MetronomeControl {
+  bpm: number
+  setBpm: (bpm: number) => void
+  change: (delta: number) => void
+  playing: boolean
+  start: () => void
+  stop: () => void
+}
+
+// The metronome's engine and tempo. It lives with the item (not inside the metronome box), so
+// the recording can start it too ("record with a metronome").
+export function useMetronome(id: string, teacherBpm?: number): MetronomeControl {
+  const [bpm, setBpmState] = useState(() => clamp(teacherBpm ?? DEFAULT_BPM))
   const [playing, setPlaying] = useState(false)
   const bpmRef = useRef(bpm)
   const contextRef = useRef<AudioContext | null>(null)
@@ -37,19 +47,8 @@ export function Metronome({ id, teacherBpm }: { id: string; teacherBpm?: number 
 
   useEffect(() => stop, [stop])
 
-  function click(context: AudioContext, at: number) {
-    const oscillator = context.createOscillator()
-    const gain = context.createGain()
-    oscillator.frequency.value = 1000
-    gain.gain.setValueAtTime(0.0001, at)
-    gain.gain.exponentialRampToValueAtTime(0.8, at + 0.002)
-    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.05)
-    oscillator.connect(gain).connect(context.destination)
-    oscillator.start(at)
-    oscillator.stop(at + 0.06)
-  }
-
-  function start() {
+  const start = useCallback(() => {
+    if (timerRef.current !== null) return
     silentRef.current = allowSoundOnSilentSwitch()
     const context = contextRef.current ?? new AudioContext()
     contextRef.current = context
@@ -58,14 +57,31 @@ export function Metronome({ id, teacherBpm }: { id: string; teacherBpm?: number 
     nextClickRef.current = context.currentTime + 0.05
     timerRef.current = window.setInterval(() => {
       while (nextClickRef.current < context.currentTime + LOOK_AHEAD_SECONDS) {
-        click(context, nextClickRef.current)
+        const at = nextClickRef.current
+        const oscillator = context.createOscillator()
+        const gain = context.createGain()
+        oscillator.frequency.value = 1000
+        gain.gain.setValueAtTime(0.0001, at)
+        gain.gain.exponentialRampToValueAtTime(0.8, at + 0.002)
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.05)
+        oscillator.connect(gain).connect(context.destination)
+        oscillator.start(at)
+        oscillator.stop(at + 0.06)
         nextClickRef.current += 60 / bpmRef.current
       }
     }, TICK_MS)
     setPlaying(true)
-  }
+  }, [id, stop])
 
-  const change = (delta: number) => setBpm((current) => clamp(current + delta))
+  const setBpm = useCallback((value: number) => setBpmState(clamp(value)), [])
+  const change = useCallback((delta: number) => setBpmState((current) => clamp(current + delta)), [])
+  return { bpm, setBpm, change, playing, start, stop }
+}
+
+// The metronome box: a tempo the student can change (a bar and − / +), with the teacher's
+// tempo shown next to it.
+export function Metronome({ control, teacherBpm }: { control: MetronomeControl; teacherBpm?: number }) {
+  const { bpm, setBpm, change, playing, start, stop } = control
   const step = 'size-12 shrink-0 rounded-full border border-ink/20 bg-white text-2xl font-medium'
 
   return (
@@ -88,7 +104,7 @@ export function Metronome({ id, teacherBpm }: { id: string; teacherBpm?: number 
           step={1}
           value={Math.min(bpm, SLIDER_MAX_BPM)}
           aria-label="קצב המטרונום"
-          onChange={(e) => setBpm(clamp(Number(e.target.value)))}
+          onChange={(e) => setBpm(Number(e.target.value))}
           className="h-10 min-w-0 flex-1 accent-ink"
         />
         <button type="button" className={step} aria-label="להאיץ ב-1" onClick={() => change(1)}>
@@ -99,7 +115,7 @@ export function Metronome({ id, teacherBpm }: { id: string; teacherBpm?: number 
         {playing ? '■ עצירת המטרונום' : '▶ הפעלת המטרונום'}
       </Button>
       {teacherBpm !== undefined && bpm !== clamp(teacherBpm) && (
-        <button type="button" className="self-center text-sm underline" onClick={() => setBpm(clamp(teacherBpm))}>
+        <button type="button" className="self-center text-sm underline" onClick={() => setBpm(teacherBpm)}>
           חזרה לקצב של המורה ({teacherBpm})
         </button>
       )}

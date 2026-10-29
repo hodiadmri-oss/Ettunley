@@ -19,8 +19,11 @@ export const adminDb = () => getFirestore(app)
 export const adminBucket = () => getStorage(app).bucket(BUCKET)
 export const adminAuth = () => getAuth(app)
 
+// A file with a real WebM start, so the upload check (verifyUpload) accepts it as audio.
+export const AUDIO_BYTES = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.from('test-audio-test-audio')])
+
 export async function putFile(path: string, contentType = 'audio/webm') {
-  await adminBucket().file(path).save(Buffer.from('test-audio'), { contentType })
+  await adminBucket().file(path).save(AUDIO_BYTES, { contentType })
 }
 
 export const fileExists = async (path: string) => (await adminBucket().file(path).exists())[0]

@@ -76,6 +76,8 @@ as small as possible:
 
 - **Done in phase 3:** practice logs hold seconds, must be believable (at least 10 s, not in the future, not older than a week, never longer than the session itself) and cannot be edited or deleted. A running timer is kept in the browser's storage only as ids and times, and removed on sign-out. Backing tracks are mp3 only (20 MB) in the teacher's private folder, shown to the student only through her own sign-in; the owner can listen to them in `/admin` and remove them.
 
+- **Done in phase 4:** the microphone is asked for only after the tap and closed the moment the recording ends or the app is hidden; nothing is uploaded before the student listens and taps send; a recording goes to `recordings/{studentId}/{assignmentId}/{itemId}` (consent required, 5 MB, audio types) and replaces the old one only after a confirmation; deleting is done by a Function. A Storage-triggered Function (`verifyUpload`) checks the first bytes of every recording (WebM, Ogg, MP4/M4A/3GP, MP3/AAC, WAV) and deletes anything else together with the mark on the item; it also removes any download token from every uploaded file (checked on the real project, the emulator ignores the removal).
+
 ### Phases 3–4 (practice, recording)
 - Microphone rules from section 1. Replace/discard flow exactly as in `CLAUDE.md`.
 - Check the file really is audio on the server (Storage "finalize" function: magic bytes, size) because the declared type is client-chosen.

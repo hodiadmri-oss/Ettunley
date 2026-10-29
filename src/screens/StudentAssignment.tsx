@@ -1,14 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
-import { AccompanimentPlayer } from '@/components/AccompanimentPlayer'
 import { ErrorNote } from '@/components/ErrorNote'
-import { ItemStatus } from '@/components/ItemStatus'
-import { Metronome } from '@/components/Metronome'
+import { PracticeItem } from '@/components/PracticeItem'
 import { PracticeTimer } from '@/components/PracticeTimer'
 import { Screen } from '@/components/Screen'
-import { SheetViewer } from '@/components/SheetViewer'
-import { YoutubeLink } from '@/components/YoutubeLink'
 import { getAssignment, listItems, type Assignment, type Item } from '@/lib/assignments'
 import { weekLabel } from '@/lib/weeks'
 
@@ -74,15 +70,14 @@ export default function StudentAssignment({ preview = false }: { preview?: boole
       )}
       <div className="flex flex-col gap-4">
         {items.map((item) => (
-          <article key={item.id} className="flex flex-col gap-3 rounded-3xl bg-white p-4 shadow-sm">
-            <h2 className="text-xl font-bold">{item.title}</h2>
-            {item.notes && <p className="whitespace-pre-wrap text-base">{item.notes}</p>}
-            {item.sheetPath && <SheetViewer path={item.sheetPath} />}
-            {item.youtubeUrl && <YoutubeLink url={item.youtubeUrl} />}
-            {item.accompanimentPath && <AccompanimentPlayer id={`accompaniment-${item.id}`} path={item.accompanimentPath} />}
-            <Metronome id={`metronome-${item.id}`} teacherBpm={item.metronomeBpm} />
-            <ItemStatus assignmentId={assignment.id} itemId={item.id} initial={item.status} readOnly={preview} />
-          </article>
+          <PracticeItem
+            key={item.id}
+            item={item}
+            assignmentId={assignment.id}
+            studentUid={preview ? studentId : state.status === 'ready' ? state.user.uid : ''}
+            canRecord={state.status === 'ready' && Boolean(state.profile.consentAt)}
+            preview={preview}
+          />
         ))}
       </div>
     </Screen>

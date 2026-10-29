@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { claimSound, isActiveSound, releaseSound } from '@/lib/sound'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { claimSound, isActiveSound, isRecordingActive, releaseSound, subscribeRecording } from '@/lib/sound'
 import { formatClock } from '@/lib/practiceTimer'
 import { loadSheet } from '@/lib/sheetFiles'
 
@@ -18,6 +18,8 @@ export function AccompanimentPlayer({ id, path }: { id: string; path: string }) 
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  // The backing track cannot be played while a recording is being made.
+  const recording = useSyncExternalStore(subscribeRecording, isRecordingActive)
 
   // Pauses where it is (the position is kept).
   const pause = useCallback(() => {
@@ -113,7 +115,7 @@ export function AccompanimentPlayer({ id, path }: { id: string; path: string }) 
         <button
           type="button"
           aria-label={playing ? 'עצירת הליווי' : 'ניגון הליווי'}
-          disabled={!ready}
+          disabled={!ready || recording}
           onClick={() => (playing ? pause() : void play())}
           className="flex size-12 shrink-0 items-center justify-center rounded-full bg-ink text-xl text-white disabled:opacity-40"
         >
@@ -142,6 +144,7 @@ export function AccompanimentPlayer({ id, path }: { id: string; path: string }) 
           10 ⏩
         </button>
       </div>
+      {recording && <p className="text-sm">אי אפשר לנגן ליווי בזמן הקלטה.</p>}
       {failed && <p role="alert" className="text-sm">{failed}</p>}
     </section>
   )

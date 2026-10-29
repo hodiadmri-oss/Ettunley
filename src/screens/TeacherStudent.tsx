@@ -101,6 +101,7 @@ export default function TeacherStudent() {
               <AssignmentList
                 assignments={assignments}
                 hrefFor={(a) => `/teacher/student/${studentId}/assignment/${a.id}`}
+                previewHrefFor={(a) => `/teacher/student/${studentId}/assignment/${a.id}/preview`}
                 emptyText="עדיין אין מטלות. אפשר ליצור את הראשונה."
               />
             )}

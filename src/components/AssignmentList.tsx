@@ -22,12 +22,15 @@ export function AssignmentList({
   hrefFor,
   emptyText,
   info,
+  previewHrefFor,
 }: {
   assignments: Assignment[]
   hrefFor: (a: Assignment) => string
   emptyText: string
   /** The student's home list: status and practice time next to each assignment. */
   info?: Record<string, AssignmentInfo>
+  /** The teacher's list: a link under each assignment to see it as the student sees it. */
+  previewHrefFor?: (a: Assignment) => string
 }) {
   if (assignments.length === 0) return <p className="text-ink/60">{emptyText}</p>
   return (
@@ -36,8 +39,8 @@ export function AssignmentList({
         <section key={group.weekStart.getTime()} className="flex flex-col gap-2">
           <h3 className="text-base font-bold text-ink/70">{weekLabel(group.weekStart)}</h3>
           {group.items.map((a) => (
+            <div key={a.id} className="flex flex-col gap-1">
             <Link
-              key={a.id}
               to={hrefFor(a)}
               className="flex min-h-14 flex-col justify-center gap-1 rounded-3xl bg-white px-4 py-3 shadow-sm"
             >
@@ -62,6 +65,12 @@ export function AssignmentList({
                 )}
               </span>
             </Link>
+            {previewHrefFor && (
+              <Link to={previewHrefFor(a)} className="self-start rounded-xl px-4 py-2 text-sm underline">
+                איך זה נראה אצל התלמיד/ה
+              </Link>
+            )}
+            </div>
           ))}
         </section>
       ))}

@@ -16,4 +16,5 @@ export {
 } from './consent'
 export { adminDeleteUser, adminLookupUser, deleteMyAccount } from './accounts'
 export { adminListFiles, adminListStudents, adminReadFile, adminRemoveFile, deleteAssignment } from './files'
+export { deleteMyRecording, verifyUpload } from './recordings'
 export { dailyRetention } from './retention'
