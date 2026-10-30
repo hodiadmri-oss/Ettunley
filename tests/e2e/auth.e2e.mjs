@@ -706,6 +706,8 @@ try {
   check('the teacher can edit her reply', true)
 
   // the student sees the reply: a "new" mark on the home list, and on the item until read
+  for (let i = 0; i < 40 && (await listDocs('replyAlerts')).length === 0; i++) await danaPage.waitForTimeout(250)
+  check('a Function keeps one alert for the unread reply', (await listDocs('replyAlerts')).length === 1)
   await noaPage.goto(`${BASE}/student`)
   await noaPage.waitForSelector('[data-testid=new-reply-badge]')
   check('the student home marks the assignment with the new teacher reply', true)
