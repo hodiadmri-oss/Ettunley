@@ -80,13 +80,32 @@ export function silentSoundUrl(): string {
 // iPhone and iPad: sound from a web page is muted by the silent switch unless the page
 // is playing "media". This asks for that (Safari 17+) and, as a fallback, keeps a silent
 // sound playing while the metronome runs. Must be called from a tap.
-export function allowSoundOnSilentSwitch(): HTMLAudioElement | null {
+type AudioSessionLike = { type: string }
+const audioSession = (): AudioSessionLike | undefined =>
+  typeof navigator === 'undefined' ? undefined : (navigator as unknown as { audioSession?: AudioSessionLike }).audioSession
+
+// iPhone and iPad (Safari 17+): the page tells the system what kind of audio it is making.
+// While recording (microphone and sound together) it must be "play-and-record", otherwise the
+// metronome is cut off when the microphone opens. Elsewhere this does nothing.
+export function setAudioSessionType(type: 'auto' | 'playback' | 'play-and-record'): void {
   try {
-    const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession
-    if (session) session.type = 'playback'
+    const session = audioSession()
+    if (session) session.type = type
   } catch {
     // not supported
   }
+}
+
+// Sound from a web page is muted by the iPhone silent switch unless the page is playing
+// "media". This asks for that and, as a fallback, keeps a silent sound playing while the
+// metronome runs. Must be called from a tap. While recording, the "play-and-record" session
+// is used instead and no silent sound is played (it would fight with the microphone).
+export function allowSoundOnSilentSwitch(): HTMLAudioElement | null {
+  if (isRecordingActive()) {
+    setAudioSessionType('play-and-record')
+    return null
+  }
+  setAudioSessionType('playback')
   try {
     const element = new Audio(silentSoundUrl())
     element.loop = true

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { deleteMyRecording, type Item } from '@/lib/assignments'
 import { db, storage } from '@/lib/firebase'
 import { formatClock } from '@/lib/practiceTimer'
-import { setRecordingActive, stopAllSound } from '@/lib/sound'
+import { setAudioSessionType, setRecordingActive, stopAllSound } from '@/lib/sound'
 
 const MAX_SECONDS = 180
 const MAX_BYTES = 5 * 1024 * 1024
@@ -73,6 +73,7 @@ export function Recorder({ assignmentId, itemId, studentUid, canRecord, existing
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setRecordingActive(false)
+    setAudioSessionType('auto')
   }, [])
 
   const forgetTake = useCallback(() => {
@@ -126,6 +127,9 @@ export function Recorder({ assignmentId, itemId, studentUid, canRecord, existing
     document.querySelectorAll('audio').forEach((audio) => audio.pause())
     forgetTake()
     setPhase('asking')
+    // Sound and microphone together (the metronome keeps playing while recording).
+    setRecordingActive(true)
+    setAudioSessionType('play-and-record')
     try {
       // Music: no noise suppression or automatic volume, which would spoil it.
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -161,7 +165,6 @@ export function Recorder({ assignmentId, itemId, studentUid, canRecord, existing
       recorderRef.current = recorder
       startedAtRef.current = Date.now()
       setElapsed(0)
-      setRecordingActive(true)
       recorder.start(1000)
       if (withMetronome) metronome.start()
       timerRef.current = window.setInterval(() => {

@@ -53,9 +53,14 @@ export function useMetronome(id: string, teacherBpm?: number): MetronomeControl 
     const context = contextRef.current ?? new AudioContext()
     contextRef.current = context
     void context.resume()
+    // Phones may pause the sound when the microphone opens or the screen dims: wake it again.
+    context.onstatechange = () => {
+      if (context.state !== 'running' && timerRef.current !== null) void context.resume()
+    }
     claimSound(id, stop)
     nextClickRef.current = context.currentTime + 0.05
     timerRef.current = window.setInterval(() => {
+      if (context.state !== 'running') void context.resume()
       while (nextClickRef.current < context.currentTime + LOOK_AHEAD_SECONDS) {
         const at = nextClickRef.current
         const oscillator = context.createOscillator()
@@ -68,6 +73,7 @@ export function useMetronome(id: string, teacherBpm?: number): MetronomeControl 
         oscillator.start(at)
         oscillator.stop(at + 0.06)
         nextClickRef.current += 60 / bpmRef.current
+        if (import.meta.env.DEV) (window as unknown as { __etunleyClicks?: number }).__etunleyClicks = ((window as unknown as { __etunleyClicks?: number }).__etunleyClicks ?? 0) + 1
       }
     }, TICK_MS)
     setPlaying(true)
