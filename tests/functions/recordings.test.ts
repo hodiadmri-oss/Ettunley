@@ -152,7 +152,7 @@ describe('reply alerts (a teacher reply the student has not read)', () => {
     const w = await world()
     await comment(w.aid, 'c1').set({ authorId: w.T, text: 'כל הכבוד', createdAt: Timestamp.now(), readAt: null })
     expect(await waitFor(() => docExists(alertPath(w.aid)))).toBe(true)
-    expect(await docData(alertPath(w.aid))).toMatchObject({ teacherId: w.T, studentId: w.S, assignmentId: w.aid, itemId: 'i1', count: 1 })
+    expect(await docData(alertPath(w.aid))).toMatchObject({ teacherId: w.T, studentId: w.S, assignmentId: w.aid, itemId: 'i1', itemTitle: 'פריט', preview: 'כל הכבוד', count: 1 })
 
     await comment(w.aid, 'c1').update({ readAt: Timestamp.now() })
     expect(await waitFor(async () => !(await docExists(alertPath(w.aid))))).toBe(true)

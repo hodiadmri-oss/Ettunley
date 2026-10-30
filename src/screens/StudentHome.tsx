@@ -12,6 +12,13 @@ import { EnterCode, WaitingForTeacher } from '@/screens/JoinTeacher'
 export default function StudentHome() {
   const { state, reloadProfile } = useAuth()
 
+  // A fresh streak when coming back from an assignment. Once only: reloading changes the state,
+  // which gives `reloadProfile` a new identity, so it must not be a dependency here.
+  useEffect(() => {
+    void reloadProfile()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') void reloadProfile()

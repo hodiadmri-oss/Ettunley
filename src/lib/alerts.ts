@@ -30,13 +30,27 @@ export async function listRecordingAlerts(teacherId: string): Promise<RecordingA
     .sort((a, b) => b.uploadedAt - a.uploadedAt)
 }
 
-// "The teacher replied and you have not read it" (kept by a Function): assignment id -> how many.
-export async function listUnreadReplies(studentId: string): Promise<Record<string, number>> {
+// "The teacher replied and you have not read it" (kept by a Function, one per item).
+export interface ReplyAlert {
+  id: string
+  assignmentId: string
+  assignmentTitle: string
+  itemTitle: string
+  preview: string
+  count: number
+}
+
+export async function listReplyAlerts(studentId: string): Promise<ReplyAlert[]> {
   const snap = await getDocs(query(collection(db, 'replyAlerts'), where('studentId', '==', studentId), limit(100)))
-  const byAssignment: Record<string, number> = {}
-  for (const d of snap.docs) {
+  return snap.docs.map((d) => {
     const x = d.data()
-    byAssignment[String(x.assignmentId)] = (byAssignment[String(x.assignmentId)] ?? 0) + Number(x.count ?? 1)
-  }
-  return byAssignment
+    return {
+      id: d.id,
+      assignmentId: String(x.assignmentId),
+      assignmentTitle: String(x.assignmentTitle ?? ''),
+      itemTitle: String(x.itemTitle ?? ''),
+      preview: String(x.preview ?? ''),
+      count: Number(x.count ?? 1),
+    }
+  })
 }

@@ -15,12 +15,19 @@ export const trackReplyAlerts = onDocumentWritten('assignments/{assignmentId}/it
   }
   const assignment = (await db.doc(`assignments/${assignmentId}`).get()).data()
   if (!assignment) return
+  const item = (await db.doc(`assignments/${assignmentId}/items/${itemId}`).get()).data()
+  // The newest unread reply, shortened, is shown on the student's home.
+  const newest = unread.docs
+    .map((d) => d.data())
+    .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))[0]
   await alert.set({
     teacherId: assignment.teacherId,
     studentId: assignment.studentId,
     assignmentId,
     itemId,
     assignmentTitle: String(assignment.title ?? ''),
+    itemTitle: String(item?.title ?? ''),
+    preview: String(newest?.text ?? '').slice(0, 120),
     count: unread.size,
   })
 })

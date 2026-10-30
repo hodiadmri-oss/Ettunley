@@ -102,6 +102,7 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 | `assignments/{id}/items/{itemId}` | position, title, notes (the teacher's practice tips, text), sheetPath, accompanimentPath, youtubeUrl, metronomeBpm, status (working/ready), statusUpdatedAt, recording { path, durationSeconds, uploadedAt }, recordingSeenAt (set by the teacher when they listen or reply) |
 | `assignments/{id}/items/{itemId}/comments/{commentId}` | authorId, text, createdAt, readAt (for the "חדש" badge) |
 | `recordingAlerts/{assignmentId_itemId}` | teacherId, studentId, assignmentId, itemId, assignmentTitle, itemTitle, uploadedAt — "a recording waits"; written by Functions only, the approved teacher reads their own |
+| `replyAlerts/{assignmentId_itemId}` | teacherId, studentId, assignmentId, itemId, assignmentTitle, itemTitle, preview, count — "the teacher replied and the student has not read it"; written by Functions only, the student reads their own |
 | `practiceLogs/{id}` | studentId, teacherId, assignmentId, seconds (real practice time, 10–36000), startedAt, endedAt |
 | `templates/{id}` | teacherId, title, description, dailyGoalMinutes, createdAt |
 | `templates/{id}/items/{itemId}` | position, title, notes, sheetPath, accompanimentPath, youtubeUrl, metronomeBpm |

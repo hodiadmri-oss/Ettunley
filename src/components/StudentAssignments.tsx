@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { AssignmentList } from '@/components/AssignmentList'
 import { ErrorNote } from '@/components/ErrorNote'
-import { listUnreadReplies } from '@/lib/alerts'
+import { HomeProgress } from '@/components/HomeProgress'
+import { NewReplies } from '@/components/NewReplies'
+import { listReplyAlerts, type ReplyAlert } from '@/lib/alerts'
 import { listAssignments, type Assignment } from '@/lib/assignments'
 import { loadOverview, type AssignmentInfo } from '@/lib/studentOverview'
 
@@ -16,7 +18,7 @@ export function StudentAssignments() {
   const [assignments, setAssignments] = useState<Assignment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<Record<string, AssignmentInfo>>({})
-  const [replies, setReplies] = useState<Record<string, number>>({})
+  const [alerts, setAlerts] = useState<ReplyAlert[]>([])
 
   useEffect(() => {
     if (!uid || !teacherId) return
@@ -28,10 +30,10 @@ export function StudentAssignments() {
           setAssignments(list)
           setError(null)
         }
-        const [overview, unread] = await Promise.all([loadOverview(uid, list), listUnreadReplies(uid).catch(() => ({}))])
+        const [overview, unread] = await Promise.all([loadOverview(uid, list), listReplyAlerts(uid).catch(() => [] as ReplyAlert[])])
         if (!cancelled) {
           setInfo(overview)
-          setReplies(unread)
+          setAlerts(unread)
         }
       } catch {
         if (!cancelled) setError('לא הצלחנו לטעון את המטלות. אפשר לנסות שוב.')
@@ -49,6 +51,9 @@ export function StudentAssignments() {
   }, [uid, teacherId])
 
   return (
+    <div className="flex flex-col gap-6">
+    <NewReplies alerts={alerts} />
+    {assignments !== null && <HomeProgress assignments={assignments} info={info} />}
     <section aria-labelledby="assignments-title" className="flex flex-col gap-3">
       <h2 id="assignments-title" className="text-xl font-bold">
         המטלות שלי
@@ -61,9 +66,10 @@ export function StudentAssignments() {
           hrefFor={(a) => `/student/assignment/${a.id}`}
           emptyText="עדיין אין מטלות. כשהמורה תוסיף, הן יופיעו כאן."
           info={info}
-          newReplies={replies}
+          newReplies={Object.fromEntries(alerts.map((a) => [a.assignmentId, a.count]))}
         />
       )}
     </section>
+    </div>
   )
 }
