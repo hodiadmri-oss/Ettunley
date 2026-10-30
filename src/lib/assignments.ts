@@ -42,6 +42,8 @@ export interface Item {
   status: 'working' | 'ready'
   /** The student's recording of this item, if there is one. */
   recording?: { path: string; durationSeconds: number; uploadedAt: number | null }
+  /** When the teacher listened to the current recording. */
+  recordingSeenAt?: number
   hasRecording: boolean
 }
 
@@ -128,9 +130,17 @@ export async function listItems(assignmentId: string): Promise<Item[]> {
               uploadedAt: (x.recording.uploadedAt as Timestamp | undefined)?.toMillis() ?? null,
             }
           : undefined,
+      recordingSeenAt: (x.recordingSeenAt as Timestamp | undefined)?.toMillis(),
       hasRecording: x.recording !== undefined,
     }
   })
+}
+
+// A recording the teacher has not listened to yet (this version of it).
+export function isWaiting(item: Item): boolean {
+  const uploaded = item.recording?.uploadedAt
+  if (!item.recording || uploaded === null || uploaded === undefined) return false
+  return item.recordingSeenAt === undefined || item.recordingSeenAt < uploaded
 }
 
 export function itemToDraft(item: Item): ItemDraft {

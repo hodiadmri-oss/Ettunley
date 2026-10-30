@@ -10,8 +10,29 @@ import { Screen } from '@/components/Screen'
 import { Button } from '@/components/ui/button'
 import { calendarAge } from '@/lib/age'
 import { listAssignments, type Assignment } from '@/lib/assignments'
+import { formatClock } from '@/lib/practiceTimer'
+import { summarizePractice } from '@/lib/practiceSummary'
+import { loadOverview, type AssignmentInfo } from '@/lib/studentOverview'
 import { db } from '@/lib/firebase'
 import { removeStudent } from '@/lib/linkApi'
+
+// Today's practice, this week's practice and the streak, from the per-day totals on the profile.
+export function PracticeLine({ days }: { days: Record<string, number> | undefined }) {
+  const summary = summarizePractice(days)
+  return (
+    <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-2xl bg-white px-4 py-3 text-center text-base shadow-sm" data-testid="practice-line">
+      <span>
+        היום <bdi className="font-bold tabular-nums">{formatClock(summary.todaySeconds * 1000)}</bdi>
+      </span>
+      <span>
+        השבוע <bdi className="font-bold tabular-nums">{formatClock(summary.weekSeconds * 1000)}</bdi>
+      </span>
+      <span>
+        רצף <bdi className="font-bold">{summary.streak}</bdi> {summary.streak === 1 ? 'יום' : 'ימים'}
+      </span>
+    </p>
+  )
+}
 
 // One student, from the teacher's side: details, parent consent for minors, the
 // assignments and a button for a new one. (Progress arrives in a later phase.)
@@ -22,6 +43,7 @@ export default function TeacherStudent() {
   const teacherUid = state.status === 'ready' ? state.user.uid : null
   const [student, setStudent] = useState<Profile | null | 'missing'>(null)
   const [assignments, setAssignments] = useState<Assignment[] | null>(null)
+  const [info, setInfo] = useState<Record<string, AssignmentInfo>>({})
   const [error, setError] = useState<string | null>(null)
   const [confirmingRemove, setConfirmingRemove] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -34,7 +56,11 @@ export default function TeacherStudent() {
       const profile = snap.exists() ? (snap.data() as Profile) : null
       if (!profile || profile.teacherId !== teacherUid) return setStudent('missing')
       setStudent(profile)
-      if (profile.linkStatus === 'approved') setAssignments(await listAssignments(studentId, teacherUid))
+      if (profile.linkStatus === 'approved') {
+        const list = await listAssignments(studentId, teacherUid)
+        setAssignments(list)
+        setInfo(await loadOverview(studentId, list, teacherUid))
+      }
     } catch {
       // A student who is no longer linked cannot be read any more.
       setStudent('missing')
@@ -84,6 +110,8 @@ export default function TeacherStudent() {
         </p>
       ) : (
         <>
+          <PracticeLine days={student.practiceDays} />
+
           <Button asChild size="large">
             <Link to={`/teacher/student/${studentId}/new-assignment`}>מטלה חדשה</Link>
           </Button>
@@ -101,6 +129,7 @@ export default function TeacherStudent() {
               <AssignmentList
                 assignments={assignments}
                 hrefFor={(a) => `/teacher/student/${studentId}/assignment/${a.id}`}
+                info={info}
                 previewHrefFor={(a) => `/teacher/student/${studentId}/assignment/${a.id}/preview`}
                 emptyText="עדיין אין מטלות. אפשר ליצור את הראשונה."
               />

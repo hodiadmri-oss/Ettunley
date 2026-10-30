@@ -96,8 +96,10 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
     ? editing
       ? `/teacher/area/template/${templateId}`
       : '/teacher/area'
-    : `/teacher/student/${studentId}`
-  const backLabel = isTemplate ? (editing ? 'לתבנית' : 'לאיזור המורה') : 'לתלמיד/ה'
+    : editing
+      ? `/teacher/student/${studentId}/assignment/${assignmentId}`
+      : `/teacher/student/${studentId}`
+  const backLabel = isTemplate ? (editing ? 'לתבנית' : 'לאיזור המורה') : editing ? 'למטלה' : 'לתלמיד/ה'
 
   const [draft, setDraft] = useState<AssignmentDraft>(() => ({
     title: '',
@@ -293,7 +295,7 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
     setError(null)
     try {
       await deleteAssignment(assignmentId)
-      navigate(back, { replace: true })
+      navigate(`/teacher/student/${studentId}`, { replace: true })
     } catch {
       setError('המחיקה לא הצליחה. אפשר לנסות שוב.')
       setBusy(false)

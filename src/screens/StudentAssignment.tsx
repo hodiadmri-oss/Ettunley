@@ -57,7 +57,7 @@ export default function StudentAssignment({ preview = false }: { preview?: boole
 
   const { assignment, items } = data
   return (
-    <Screen title={assignment.title} subtitle={weekLabel(assignment.weekStart)} top backTo={back} backLabel={preview ? 'לעריכת המטלה' : 'חזרה'}>
+    <Screen title={assignment.title} subtitle={weekLabel(assignment.weekStart)} top backTo={back} backLabel={preview ? 'למטלה' : 'חזרה'}>
       {preview && (
         <p className="rounded-2xl bg-sky px-4 py-3 text-center text-base">
           כך המסך נראה לתלמיד/ה. מה שהתלמיד/ה סימן/ה מופיע, ואי אפשר לשנות כאן.

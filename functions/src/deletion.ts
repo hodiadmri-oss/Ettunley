@@ -1,6 +1,7 @@
 import { getAuth } from 'firebase-admin/auth'
 import { FieldValue, getFirestore, type Query } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
+import { deleteAlertsOfTeacher } from './alerts'
 import { STORAGE_BUCKET } from './config'
 import { unlinkUpdate, consentEndsWithLink } from './unlink'
 
@@ -66,6 +67,7 @@ export async function deleteUserData(uid: string): Promise<void> {
     await deleteFolder(`recordings/${data.studentId}/${assignment.id}/`)
   })
   await deleteAll(db.collection('practiceLogs').where('teacherId', '==', uid))
+  await deleteAlertsOfTeacher(uid)
   await deleteAll(db.collection('templates').where('teacherId', '==', uid))
   await deleteAll(db.collection('parentConsents').where('teacherId', '==', uid))
   await deleteFolder(`sheet-music/${uid}/`)

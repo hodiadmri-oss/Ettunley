@@ -15,6 +15,7 @@ import Settings from '@/screens/Settings'
 import SignIn from '@/screens/SignIn'
 import SignUp from '@/screens/SignUp'
 import TeacherArea from '@/screens/TeacherArea'
+import TeacherAssignment from '@/screens/TeacherAssignment'
 import TemplatePage from '@/screens/TemplatePage'
 import StudentAssignment from '@/screens/StudentAssignment'
 import StudentHome from '@/screens/StudentHome'
@@ -96,7 +97,8 @@ function Router() {
           <Route path="/teacher/area/template/:templateId/edit" element={<AssignmentEditor mode="template" />} />
           <Route path="/teacher/student/:studentId" element={<TeacherStudent />} />
           <Route path="/teacher/student/:studentId/new-assignment" element={<AssignmentEditor />} />
-          <Route path="/teacher/student/:studentId/assignment/:assignmentId" element={<AssignmentEditor />} />
+          <Route path="/teacher/student/:studentId/assignment/:assignmentId" element={<TeacherAssignment />} />
+          <Route path="/teacher/student/:studentId/assignment/:assignmentId/edit" element={<AssignmentEditor />} />
           <Route path="/teacher/student/:studentId/assignment/:assignmentId/preview" element={<StudentAssignment preview />} />
         </>
       )}

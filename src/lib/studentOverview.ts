@@ -1,5 +1,5 @@
 import { collection, getDocs, limit, orderBy, query, Timestamp, where } from 'firebase/firestore'
-import { listItems, type Assignment } from '@/lib/assignments'
+import { isWaiting, listItems, type Assignment } from '@/lib/assignments'
 import { db } from '@/lib/firebase'
 
 // What the student's home list shows next to each assignment.
@@ -10,6 +10,8 @@ export interface AssignmentInfo {
   /** Practice today and in all, in milliseconds. Null when not loaded. */
   todayMs: number | null
   totalMs: number | null
+  /** Recordings the teacher has not listened to yet. */
+  waiting: number | null
 }
 
 // The status of items is read for the newest assignments only, and the practice from the newest
@@ -17,9 +19,15 @@ export interface AssignmentInfo {
 const MAX_ASSIGNMENTS_WITH_STATUS = 15
 const MAX_LOGS = 300
 
-export async function loadOverview(studentId: string, assignments: Assignment[]): Promise<Record<string, AssignmentInfo>> {
+// The teacher's list of one student's assignments uses it too (then `teacherId` is given, as the
+// security rules need it for her query).
+export async function loadOverview(
+  studentId: string,
+  assignments: Assignment[],
+  teacherId?: string,
+): Promise<Record<string, AssignmentInfo>> {
   const info: Record<string, AssignmentInfo> = {}
-  for (const a of assignments) info[a.id] = { ready: null, total: null, todayMs: null, totalMs: null }
+  for (const a of assignments) info[a.id] = { ready: null, total: null, todayMs: null, totalMs: null, waiting: null }
 
   const statuses = Promise.all(
     assignments.slice(0, MAX_ASSIGNMENTS_WITH_STATUS).map(async (a) => {
@@ -27,6 +35,7 @@ export async function loadOverview(studentId: string, assignments: Assignment[])
         const items = await listItems(a.id)
         info[a.id].total = items.length
         info[a.id].ready = items.filter((i) => i.status === 'ready').length
+        info[a.id].waiting = items.filter(isWaiting).length
       } catch {
         // no status for this one
       }
@@ -36,7 +45,13 @@ export async function loadOverview(studentId: string, assignments: Assignment[])
   const practice = (async () => {
     try {
       const snap = await getDocs(
-        query(collection(db, 'practiceLogs'), where('studentId', '==', studentId), orderBy('endedAt', 'desc'), limit(MAX_LOGS)),
+        query(
+          collection(db, 'practiceLogs'),
+          where('studentId', '==', studentId),
+          ...(teacherId ? [where('teacherId', '==', teacherId)] : []),
+          orderBy('endedAt', 'desc'),
+          limit(MAX_LOGS),
+        ),
       )
       const midnight = new Date()
       midnight.setHours(0, 0, 0, 0)

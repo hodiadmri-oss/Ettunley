@@ -25,6 +25,8 @@ export interface Profile {
   teacherId?: string
   teacherName?: string
   linkStatus?: 'pending' | 'approved'
+  /** Seconds practised per day ("2026-10-29": 1500), the last 60 days. Written by a Function. */
+  practiceDays?: Record<string, number>
 }
 
 export function cleanName(raw: string | null | undefined): string {

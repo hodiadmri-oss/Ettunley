@@ -17,6 +17,16 @@ function StatusChip({ info }: { info: AssignmentInfo | undefined }) {
   )
 }
 
+// "2 הקלטות חדשות": recordings the teacher has not listened to.
+function WaitingBadge({ info }: { info: AssignmentInfo | undefined }) {
+  if (!info?.waiting) return null
+  return (
+    <span className="shrink-0 rounded-full bg-ink px-3 py-1 text-sm font-medium text-white" data-testid="waiting-badge">
+      {info.waiting === 1 ? 'הקלטה חדשה' : `${info.waiting} הקלטות חדשות`}
+    </span>
+  )
+}
+
 export function AssignmentList({
   assignments,
   hrefFor,
@@ -46,7 +56,10 @@ export function AssignmentList({
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="text-lg font-bold">{a.title}</span>
-                <StatusChip info={info?.[a.id]} />
+                <span className="flex flex-wrap items-center justify-end gap-1">
+                  <WaitingBadge info={info?.[a.id]} />
+                  <StatusChip info={info?.[a.id]} />
+                </span>
               </span>
               <span className="flex items-center gap-1 text-sm text-ink/60">
                 <span>יעד יומי: {a.dailyGoalMinutes} דקות</span>

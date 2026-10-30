@@ -4,7 +4,16 @@ import { loadSheet } from '@/lib/sheetFiles'
 
 // Listening to a saved recording. It is fetched with the person's own sign-in when they tap
 // (never a public link), then shown with the browser's own player.
-export function RecordingPlayer({ path, label = 'האזנה להקלטה' }: { path: string; label?: string }) {
+export function RecordingPlayer({
+  path,
+  label = 'האזנה להקלטה',
+  onPlay,
+}: {
+  path: string
+  label?: string
+  /** Called when playing starts (the teacher's "I listened"). */
+  onPlay?: () => void
+}) {
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [url, setUrl] = useState<string | null>(null)
 
@@ -25,7 +34,7 @@ export function RecordingPlayer({ path, label = 'האזנה להקלטה' }: { p
     }
   }
 
-  if (url) return <audio controls src={url} className="w-full" aria-label="ההקלטה" />
+  if (url) return <audio controls src={url} className="w-full" aria-label="ההקלטה" onPlay={onPlay} />
   return (
     <div className="flex flex-col gap-1">
       <Button variant="soft" disabled={state === 'loading'} onClick={() => void load()}>

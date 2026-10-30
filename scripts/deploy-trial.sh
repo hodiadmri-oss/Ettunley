@@ -19,7 +19,7 @@ set -euo pipefail
 PROJECT="ettunley-61749"
 BUCKET="$PROJECT.firebasestorage.app"
 # Functions that changed since the last published version (used by "update").
-UPDATE_FUNCTIONS="deleteMyRecording,verifyUpload"
+UPDATE_FUNCTIONS="trackRecordingAlerts,trackPracticeLog"
 MODE="${1:-full}"
 cd "$(dirname "$0")/.."
 
@@ -98,7 +98,8 @@ else
     "sendParentConsent,getParentConsentInfo,approveParentConsent,getParentManageInfo"
     "manageParentConsent,deleteMyAccount,adminLookupUser,adminDeleteUser"
     "deleteAssignment,adminListFiles,adminRemoveFile,adminReadFile"
-    "adminListStudents,deleteMyRecording,verifyUpload,dailyRetention"
+    "adminListStudents,deleteMyRecording,verifyUpload,trackRecordingAlerts"
+    "trackPracticeLog,dailyRetention"
   )
 fi
 for group in "${FUNCTION_GROUPS[@]}"; do
@@ -132,6 +133,9 @@ cat > "$CORS_FILE" <<JSON
 JSON
 gsutil cors set "$CORS_FILE" "gs://$BUCKET" || echo "WARNING: could not set CORS; sheet music will not open until it is set (see docs/DEPLOY-TRIAL.md)."
 rm -f "$CORS_FILE"
+
+say "Teacher screen: filling in what happened before (safe to repeat)"
+node scripts/backfill-teacher-summary.mjs || echo "WARNING: the summary for older practice and recordings was not filled in; run: node scripts/backfill-teacher-summary.mjs"
 
 say "Done"
 echo "Open:  https://$PROJECT.web.app"

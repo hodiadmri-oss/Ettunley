@@ -7,6 +7,15 @@
         { "fieldPath": "studentId", "order": "ASCENDING" },
         { "fieldPath": "endedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "practiceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studentId", "order": "ASCENDING" },
+        { "fieldPath": "teacherId", "order": "ASCENDING" },
+        { "fieldPath": "endedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

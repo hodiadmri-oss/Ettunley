@@ -95,12 +95,13 @@ AI-generated exercises, music recognition from images or audio, notation renderi
 
 | Path | Fields |
 |------|--------|
-| `users/{uid}` | role (teacher/student, immutable), name, createdAt. Students: birthDate, isMinor, instrument, level, teacherId, teacherName, linkStatus (pending/approved) — teacherId, teacherName and linkStatus are writable only by Functions —, consentBy (self/parent), consentAt. Teachers: teacherStatus (pending/approved/rejected — writable only by Functions), inviteCode (Functions only), copyrightStatementAt (the teacher writes it once; the owner cannot approve without it) |
+| `users/{uid}` | role (teacher/student, immutable), name, createdAt. Students: birthDate, isMinor, instrument, level, teacherId, teacherName, linkStatus (pending/approved) — teacherId, teacherName and linkStatus are writable only by Functions —, consentBy (self/parent), consentAt. Teachers: teacherStatus (pending/approved/rejected — writable only by Functions), inviteCode (Functions only), practiceDays (Functions only; seconds per Israel day, last 60 days, for the teacher's summary), copyrightStatementAt (the teacher writes it once; the owner cannot approve without it) |
 | `inviteCodes/{code}` | teacherId — **no client access**, Functions only |
 | `parentConsents/{id}` | id = the student's uid. studentId, teacherId, parentEmail (deleted after approval), tokenHash (deleted after use), sentAt, expiresAt, parentName, approvedAt, consentTextVersion, manageTokenHash, withdrawnAt — teacher can read status of own students only; writes via Functions only |
 | `assignments/{id}` | teacherId, studentId, title, description, dailyGoalMinutes, weekStart, createdAt |
-| `assignments/{id}/items/{itemId}` | position, title, notes (the teacher's practice tips, text), sheetPath, accompanimentPath, youtubeUrl, metronomeBpm, status (working/ready), statusUpdatedAt, recording { path, durationSeconds, uploadedAt } |
+| `assignments/{id}/items/{itemId}` | position, title, notes (the teacher's practice tips, text), sheetPath, accompanimentPath, youtubeUrl, metronomeBpm, status (working/ready), statusUpdatedAt, recording { path, durationSeconds, uploadedAt }, recordingSeenAt (set by the teacher when they listen or reply) |
 | `assignments/{id}/items/{itemId}/comments/{commentId}` | authorId, text, createdAt, readAt (for the "חדש" badge) |
+| `recordingAlerts/{assignmentId_itemId}` | teacherId, studentId, assignmentId, itemId, assignmentTitle, itemTitle, uploadedAt — "a recording waits"; written by Functions only, the approved teacher reads their own |
 | `practiceLogs/{id}` | studentId, teacherId, assignmentId, seconds (real practice time, 10–36000), startedAt, endedAt |
 | `templates/{id}` | teacherId, title, description, dailyGoalMinutes, createdAt |
 | `templates/{id}/items/{itemId}` | position, title, notes, sheetPath, accompanimentPath, youtubeUrl, metronomeBpm |

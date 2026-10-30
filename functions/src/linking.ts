@@ -1,5 +1,6 @@
 import { getFirestore } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
+import { deleteAlertsOfStudent } from './alerts'
 import { parseUid, requireApprovedTeacher, requireSignedIn } from './guards'
 import { generateInviteCode, INVITE_ALPHABET, INVITE_LENGTH } from './inviteCode'
 import { consumeAttempt, ipKey, resetAttempts } from './rateLimit'
@@ -59,6 +60,7 @@ async function changeStudentLink(
   teacherUid: string,
   studentId: string,
   change: (data: FirebaseFirestore.DocumentData) => Record<string, unknown> | null,
+  options: { unlinks?: boolean } = {},
 ) {
   const db = getFirestore()
   await db.runTransaction(async (tx) => {
@@ -76,6 +78,8 @@ async function changeStudentLink(
       if (consentEndsWithLink(data)) tx.delete(db.doc(`parentConsents/${studentId}`))
     }
   })
+  // The teacher loses sight of this student, including "a recording is waiting".
+  if (options.unlinks) await deleteAlertsOfStudent(studentId)
 }
 
 // The teacher confirms or turns down a student who typed their code.
@@ -94,7 +98,7 @@ export const respondToStudent = onCall(async (request) => {
     }
     if (student.linkStatus !== 'pending') throw new HttpsError('failed-precondition', 'הבקשה כבר לא ממתינה.')
     return unlinkUpdate(student)
-  })
+  }, { unlinks: decision === 'reject' })
   return { status: decision === 'approve' ? ('approved' as const) : ('rejected' as const) }
 })
 
@@ -103,7 +107,7 @@ export const respondToStudent = onCall(async (request) => {
 export const removeStudent = onCall(async (request) => {
   const teacherUid = await requireApprovedTeacher(request)
   const studentId = parseUid(request.data?.studentId)
-  await changeStudentLink(teacherUid, studentId, (student) => unlinkUpdate(student))
+  await changeStudentLink(teacherUid, studentId, (student) => unlinkUpdate(student), { unlinks: true })
   return { status: 'removed' as const }
 })
 

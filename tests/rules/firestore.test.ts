@@ -770,6 +770,79 @@ describe('recordings (item.recording)', () => {
   })
 })
 
+describe('"I listened" and recording alerts', () => {
+  const withRecording = () =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'assignments/a1/items/i1'), {
+        recording: { path: 'recordings/adultA/a1/i1', durationSeconds: 30, uploadedAt: Timestamp.now() },
+      })
+    })
+
+  it('the teacher marks a recording as heard, with the server time', async () => {
+    await withRecording()
+    await assertSucceeds(updateDoc(doc(as(ids.teacherA), 'assignments/a1/items/i1'), { recordingSeenAt: serverTimestamp() }))
+  })
+
+  it('the time cannot be chosen, and nothing else can ride along', async () => {
+    await withRecording()
+    await assertFails(updateDoc(doc(as(ids.teacherA), 'assignments/a1/items/i1'), { recordingSeenAt: Timestamp.fromMillis(Date.now() + 86400000) }))
+    await assertFails(updateDoc(doc(as(ids.teacherA), 'assignments/a1/items/i1'), { recordingSeenAt: serverTimestamp(), title: 'x' }))
+    await assertFails(updateDoc(doc(as(ids.teacherA), 'assignments/a1/items/i1'), { recordingSeenAt: serverTimestamp(), status: 'ready' }))
+  })
+
+  it('only the teacher of that student, and only for an item that has a recording', async () => {
+    await assertFails(updateDoc(doc(as(ids.teacherA), 'assignments/a1/items/i1'), { recordingSeenAt: serverTimestamp() }))
+    await withRecording()
+    await assertFails(updateDoc(doc(as(ids.teacherB), 'assignments/a1/items/i1'), { recordingSeenAt: serverTimestamp() }))
+    await assertFails(updateDoc(doc(as(ids.adultA), 'assignments/a1/items/i1'), { recordingSeenAt: serverTimestamp() }))
+    await assertFails(updateDoc(doc(as(ids.teacherPending), 'assignments/a1/items/i1'), { recordingSeenAt: serverTimestamp() }))
+  })
+
+  it('a removed student cannot be listened to any more', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'assignments/aR/items/i1'), {
+        recording: { path: 'recordings/removedStudent/aR/i1', durationSeconds: 30, uploadedAt: Timestamp.now() },
+      })
+    })
+    await assertFails(updateDoc(doc(as(ids.teacherA), 'assignments/aR/items/i1'), { recordingSeenAt: serverTimestamp() }))
+  })
+
+  describe('recordingAlerts', () => {
+    beforeEach(async () => {
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'recordingAlerts/a1_i1'), {
+          teacherId: 'teacherA', studentId: 'adultA', assignmentId: 'a1', itemId: 'i1',
+          assignmentTitle: 'מטלה', itemTitle: 'פריט', uploadedAt: Timestamp.now(),
+        })
+      })
+    })
+
+    it('the teacher lists her own alerts', async () => {
+      await assertSucceeds(getDocs(query(collection(as(ids.teacherA), 'recordingAlerts'), where('teacherId', '==', 'teacherA'))))
+      await assertSucceeds(getDoc(doc(as(ids.teacherA), 'recordingAlerts/a1_i1')))
+    })
+
+    it('nobody else reads them: another teacher, a student, a pending teacher', async () => {
+      await assertFails(getDoc(doc(as(ids.teacherB), 'recordingAlerts/a1_i1')))
+      await assertFails(getDoc(doc(as(ids.adultA), 'recordingAlerts/a1_i1')))
+      await assertFails(getDoc(doc(as(ids.teacherPending), 'recordingAlerts/a1_i1')))
+      await assertFails(getDocs(query(collection(as(ids.teacherB), 'recordingAlerts'), where('teacherId', '==', 'teacherA'))))
+      await assertFails(getDocs(collection(as(ids.teacherA), 'recordingAlerts')))
+    })
+
+    it('only a Function writes or deletes them', async () => {
+      await assertFails(setDoc(doc(as(ids.teacherA), 'recordingAlerts/new'), { teacherId: 'teacherA' }))
+      await assertFails(deleteDoc(doc(as(ids.teacherA), 'recordingAlerts/a1_i1')))
+      await assertFails(deleteDoc(doc(as(ids.adultA), 'recordingAlerts/a1_i1')))
+    })
+  })
+
+  it('a student cannot write the practice summary or the alert fields on their own profile', async () => {
+    await assertFails(updateDoc(doc(as(ids.adultA), 'users/adultA'), { practiceDays: { '2026-10-29': 99999 } }))
+    await assertFails(updateDoc(doc(as(ids.adultA), 'users/adultA'), { waitingRecordings: 5 }))
+  })
+})
+
 describe('comments (teacher replies)', () => {
   const newComment = (author = 'teacherA') => ({
     authorId: author, text: 'יפה מאוד, תשימי לב לקצב', createdAt: serverTimestamp(), readAt: null,

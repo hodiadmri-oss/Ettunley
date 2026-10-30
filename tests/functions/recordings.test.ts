@@ -1,6 +1,6 @@
 import type { RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { AdminTimestamp as Timestamp, adminBucket, adminDb, docData, fileExists } from './adminSdk'
+import { AdminTimestamp as Timestamp, adminBucket, adminDb, docData, docExists, fileExists } from './adminSdk'
 import { callAs, createEnv, createUser, errorCodeOf } from './helpers'
 
 let env: RulesTestEnvironment
@@ -79,4 +79,67 @@ describe('verifyUpload (runs after every upload)', () => {
 
   // Removing the download token is not tested here: the emulator keeps its own copy of the token
   // and ignores the removal. It is checked on the real project instead (see docs/DEPLOY-TRIAL.md).
+})
+
+describe('recording alerts (a recording waits for the teacher)', () => {
+  const alertPath = (aid: string) => `recordingAlerts/${aid}_i1`
+
+  it('an alert exists for a recording that was not heard, and goes when the teacher listened', async () => {
+    const w = await world()
+    // the world() item already has a recording, written before the trigger ran; touch it
+    await adminDb().doc(`assignments/${w.aid}/items/i1`).update({ title: 'פריט א' })
+    expect(await waitFor(() => docExists(alertPath(w.aid)))).toBe(true)
+    expect(await docData(alertPath(w.aid))).toMatchObject({
+      teacherId: w.T, studentId: w.S, assignmentId: w.aid, itemId: 'i1', assignmentTitle: 'מטלה', itemTitle: 'פריט א',
+    })
+
+    await adminDb().doc(`assignments/${w.aid}/items/i1`).update({ recordingSeenAt: Timestamp.fromMillis(Date.now() + 1000) })
+    expect(await waitFor(async () => !(await docExists(alertPath(w.aid))))).toBe(true)
+  })
+
+  it('a new recording after the teacher listened makes it waiting again', async () => {
+    const w = await world()
+    const ref = adminDb().doc(`assignments/${w.aid}/items/i1`)
+    await ref.update({ recordingSeenAt: Timestamp.fromMillis(Date.now() + 1000) })
+    await new Promise((r) => setTimeout(r, 1500))
+    expect(await docExists(alertPath(w.aid))).toBe(false)
+    await ref.update({ recording: { path: w.path, durationSeconds: 20, uploadedAt: Timestamp.fromMillis(Date.now() + 60000) } })
+    expect(await waitFor(() => docExists(alertPath(w.aid)))).toBe(true)
+  })
+
+  it('goes when the student deletes the recording or the item disappears', async () => {
+    const w = await world()
+    const ref = adminDb().doc(`assignments/${w.aid}/items/i1`)
+    await ref.update({ title: 'שינוי' })
+    expect(await waitFor(() => docExists(alertPath(w.aid)))).toBe(true)
+    await adminBucket().file(w.path).save(Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(40)]), { contentType: 'audio/webm' })
+    await callAs(w.student, 'deleteMyRecording', { assignmentId: w.aid, itemId: 'i1' })
+    expect(await waitFor(async () => !(await docExists(alertPath(w.aid))))).toBe(true)
+  })
+
+  it('removing the student takes their alerts away from the teacher', async () => {
+    const w = await world()
+    await adminDb().doc(`assignments/${w.aid}/items/i1`).update({ title: 'שוב' })
+    expect(await waitFor(() => docExists(alertPath(w.aid)))).toBe(true)
+    expect(await callAs(w.teacher, 'removeStudent', { studentId: w.S })).toEqual({ status: 'removed' })
+    expect(await docExists(alertPath(w.aid))).toBe(false)
+  })
+})
+
+describe('practice summary on the student profile', () => {
+  it('adds each session to the day it ended, and never brings back a deleted student', async () => {
+    const w = await world()
+    const log = (seconds: number) => ({
+      studentId: w.S, teacherId: w.T, assignmentId: w.aid, seconds, startedAt: Timestamp.now(), endedAt: Timestamp.now(),
+    })
+    await adminDb().collection('practiceLogs').add(log(120))
+    await adminDb().collection('practiceLogs').add(log(30))
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    expect(await waitFor(async () => (await docData(`users/${w.S}`))?.practiceDays?.[today] === 150)).toBe(true)
+
+    await adminDb().doc(`users/${w.S}`).delete()
+    await adminDb().collection('practiceLogs').add(log(60))
+    await new Promise((r) => setTimeout(r, 3000))
+    expect(await docExists(`users/${w.S}`)).toBe(false)
+  })
 })

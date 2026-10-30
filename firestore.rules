@@ -244,7 +244,7 @@ service cloud.firestore {
       function validItemContent(d) {
         return d.keys().hasOnly(
                ['position', 'title', 'notes', 'sheetPath', 'accompanimentPath', 'youtubeUrl',
-                'metronomeBpm', 'status', 'statusUpdatedAt', 'recording'])
+                'metronomeBpm', 'status', 'statusUpdatedAt', 'recording', 'recordingSeenAt'])
           && d.position is int
           && d.position >= 0
           && d.position < 10
@@ -295,6 +295,11 @@ service cloud.firestore {
               && request.resource.data.diff(resource.data).affectedKeys()
                    .hasOnly(['position', 'title', 'notes', 'sheetPath', 'accompanimentPath', 'youtubeUrl', 'metronomeBpm'])
               && validItemContent(request.resource.data))
+          // Teacher: "I listened" - the time is the server's, and only for an item that has a recording.
+          || (isTeacherOf(assignmentDoc(aid))
+              && 'recording' in resource.data
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recordingSeenAt'])
+              && request.resource.data.recordingSeenAt == request.time)
           // Student: status and recording only.
           || (isStudentOf(assignmentDoc(aid))
               && validStudentItemChange(aid, itemId));
@@ -329,6 +334,17 @@ service cloud.firestore {
           allow delete: if false;
         }
       }
+    }
+
+    // ---------------------------------------------------------------
+    // recordingAlerts/{assignmentId_itemId}: "a recording waits for the teacher to listen".
+    // Written by a Function only (when a recording arrives, deleted when it is heard or gone).
+    // A teacher reads the alerts addressed to her; they hold ids and titles, no names.
+    // ---------------------------------------------------------------
+
+    match /recordingAlerts/{id} {
+      allow read: if isApprovedTeacher() && resource.data.teacherId == request.auth.uid;
+      allow write: if false;
     }
 
     // ---------------------------------------------------------------
