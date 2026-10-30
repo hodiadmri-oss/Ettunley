@@ -60,3 +60,10 @@ export async function editReply(assignmentId: string, itemId: string, commentId:
   await updateDoc(doc(commentsOf(assignmentId, itemId), commentId), { text: text.trim() })
 }
 
+
+// The student read the replies: each unread one gets the time (the "חדש" mark goes away).
+export async function markRepliesRead(assignmentId: string, itemId: string, ids: string[]): Promise<void> {
+  const batch = writeBatch(db)
+  for (const id of ids) batch.update(doc(commentsOf(assignmentId, itemId), id), { readAt: serverTimestamp() })
+  await batch.commit()
+}

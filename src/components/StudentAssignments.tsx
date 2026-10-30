@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { AssignmentList } from '@/components/AssignmentList'
 import { ErrorNote } from '@/components/ErrorNote'
+import { listUnreadReplies } from '@/lib/alerts'
 import { listAssignments, type Assignment } from '@/lib/assignments'
 import { loadOverview, type AssignmentInfo } from '@/lib/studentOverview'
 
@@ -15,6 +16,7 @@ export function StudentAssignments() {
   const [assignments, setAssignments] = useState<Assignment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<Record<string, AssignmentInfo>>({})
+  const [replies, setReplies] = useState<Record<string, number>>({})
 
   useEffect(() => {
     if (!uid || !teacherId) return
@@ -26,8 +28,11 @@ export function StudentAssignments() {
           setAssignments(list)
           setError(null)
         }
-        const overview = await loadOverview(uid, list)
-        if (!cancelled) setInfo(overview)
+        const [overview, unread] = await Promise.all([loadOverview(uid, list), listUnreadReplies(uid).catch(() => ({}))])
+        if (!cancelled) {
+          setInfo(overview)
+          setReplies(unread)
+        }
       } catch {
         if (!cancelled) setError('לא הצלחנו לטעון את המטלות. אפשר לנסות שוב.')
       }
@@ -56,6 +61,7 @@ export function StudentAssignments() {
           hrefFor={(a) => `/student/assignment/${a.id}`}
           emptyText="עדיין אין מטלות. כשהמורה תוסיף, הן יופיעו כאן."
           info={info}
+          newReplies={replies}
         />
       )}
     </section>

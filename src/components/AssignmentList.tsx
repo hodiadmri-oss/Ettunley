@@ -27,11 +27,22 @@ function WaitingBadge({ info }: { info: AssignmentInfo | undefined }) {
   )
 }
 
+// The student's list: the teacher replied and it was not read yet.
+function NewReplyBadge({ count }: { count: number | undefined }) {
+  if (!count) return null
+  return (
+    <span className="shrink-0 rounded-full bg-ink px-3 py-1 text-sm font-medium text-white" data-testid="new-reply-badge">
+      חדש: תגובה מהמורה
+    </span>
+  )
+}
+
 export function AssignmentList({
   assignments,
   hrefFor,
   emptyText,
   info,
+  newReplies,
   previewHrefFor,
 }: {
   assignments: Assignment[]
@@ -39,6 +50,8 @@ export function AssignmentList({
   emptyText: string
   /** The student's home list: status and practice time next to each assignment. */
   info?: Record<string, AssignmentInfo>
+  /** The student's list: assignment id -> unread teacher replies. */
+  newReplies?: Record<string, number>
   /** The teacher's list: a link under each assignment to see it as the student sees it. */
   previewHrefFor?: (a: Assignment) => string
 }) {
@@ -57,6 +70,7 @@ export function AssignmentList({
               <span className="flex items-center justify-between gap-2">
                 <span className="text-lg font-bold">{a.title}</span>
                 <span className="flex flex-wrap items-center justify-end gap-1">
+                  <NewReplyBadge count={newReplies?.[a.id]} />
                   <WaitingBadge info={info?.[a.id]} />
                   <StatusChip info={info?.[a.id]} />
                 </span>

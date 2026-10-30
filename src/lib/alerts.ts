@@ -29,3 +29,14 @@ export async function listRecordingAlerts(teacherId: string): Promise<RecordingA
     })
     .sort((a, b) => b.uploadedAt - a.uploadedAt)
 }
+
+// "The teacher replied and you have not read it" (kept by a Function): assignment id -> how many.
+export async function listUnreadReplies(studentId: string): Promise<Record<string, number>> {
+  const snap = await getDocs(query(collection(db, 'replyAlerts'), where('studentId', '==', studentId), limit(100)))
+  const byAssignment: Record<string, number> = {}
+  for (const d of snap.docs) {
+    const x = d.data()
+    byAssignment[String(x.assignmentId)] = (byAssignment[String(x.assignmentId)] ?? 0) + Number(x.count ?? 1)
+  }
+  return byAssignment
+}

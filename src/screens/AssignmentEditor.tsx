@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { ErrorNote } from '@/components/ErrorNote'
 import { Screen } from '@/components/Screen'
@@ -364,12 +364,6 @@ export default function AssignmentEditor({ mode = 'assignment' }: { mode?: 'assi
           void save()
         }}
       >
-        {editing && !isTemplate && (
-          <Button asChild variant="soft">
-            <Link to={`/teacher/student/${studentId}/assignment/${assignmentId}/preview`}>איך זה נראה אצל התלמיד/ה</Link>
-          </Button>
-        )}
-
         {!editing && !isTemplate && templates.length > 0 && (
           <div className="flex flex-col gap-2 rounded-2xl bg-sky p-3">
             <Label htmlFor="template">להתחיל מתבנית (לא חובה)</Label>

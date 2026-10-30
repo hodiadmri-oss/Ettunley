@@ -5,6 +5,7 @@ import { Recorder } from '@/components/Recorder'
 import { RecordingPlayer } from '@/components/RecordingPlayer'
 import { SheetViewer } from '@/components/SheetViewer'
 import { YoutubeLink } from '@/components/YoutubeLink'
+import { ItemReplies } from '@/components/ItemReplies'
 import type { Item } from '@/lib/assignments'
 
 // One item as the student sees it: the teacher's tips, sheet music, YouTube, backing track,
@@ -49,6 +50,7 @@ export function PracticeItem({
           metronome={metronome}
         />
       )}
+      <ItemReplies assignmentId={assignmentId} itemId={item.id} preview={preview} />
       <ItemStatus assignmentId={assignmentId} itemId={item.id} initial={item.status} readOnly={preview} />
     </article>
   )

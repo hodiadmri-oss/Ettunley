@@ -837,6 +837,33 @@ describe('"I listened" and recording alerts', () => {
     })
   })
 
+  describe('replyAlerts', () => {
+    beforeEach(async () => {
+      await env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'replyAlerts/a1_i1'), {
+          teacherId: 'teacherA', studentId: 'adultA', assignmentId: 'a1', itemId: 'i1', assignmentTitle: 'מטלה', count: 1,
+        })
+      })
+    })
+
+    it('the student it is addressed to reads it', async () => {
+      await assertSucceeds(getDoc(doc(as(ids.adultA), 'replyAlerts/a1_i1')))
+      await assertSucceeds(getDocs(query(collection(as(ids.adultA), 'replyAlerts'), where('studentId', '==', 'adultA'))))
+    })
+
+    it('nobody else reads it: another student, any teacher', async () => {
+      await assertFails(getDoc(doc(as(ids.minorA), 'replyAlerts/a1_i1')))
+      await assertFails(getDoc(doc(as(ids.teacherA), 'replyAlerts/a1_i1')))
+      await assertFails(getDoc(doc(as(ids.teacherB), 'replyAlerts/a1_i1')))
+    })
+
+    it('only a Function writes or deletes it', async () => {
+      await assertFails(setDoc(doc(as(ids.adultA), 'replyAlerts/new'), { studentId: 'adultA', teacherId: 'teacherA' }))
+      await assertFails(deleteDoc(doc(as(ids.adultA), 'replyAlerts/a1_i1')))
+      await assertFails(updateDoc(doc(as(ids.teacherA), 'replyAlerts/a1_i1'), { count: 0 }))
+    })
+  })
+
   it('a student cannot write the practice summary or the alert fields on their own profile', async () => {
     await assertFails(updateDoc(doc(as(ids.adultA), 'users/adultA'), { practiceDays: { '2026-10-29': 99999 } }))
     await assertFails(updateDoc(doc(as(ids.adultA), 'users/adultA'), { waitingRecordings: 5 }))

@@ -348,6 +348,16 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
+    // replyAlerts/{assignmentId_itemId}: "the teacher replied and the student has not read it".
+    // Written by a Function only (and deleted when the student is unlinked); the student it is addressed to reads it.
+    // ---------------------------------------------------------------
+
+    match /replyAlerts/{id} {
+      allow read: if isStudentOf(resource.data);
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------
     // practiceLogs/{id}
     // ---------------------------------------------------------------
 

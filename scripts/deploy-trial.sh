@@ -19,7 +19,7 @@ set -euo pipefail
 PROJECT="ettunley-61749"
 BUCKET="$PROJECT.firebasestorage.app"
 # Functions that changed since the last published version (used by "update").
-UPDATE_FUNCTIONS="trackRecordingAlerts,trackPracticeLog"
+UPDATE_FUNCTIONS="trackReplyAlerts"
 MODE="${1:-full}"
 cd "$(dirname "$0")/.."
 
@@ -99,7 +99,7 @@ else
     "manageParentConsent,deleteMyAccount,adminLookupUser,adminDeleteUser"
     "deleteAssignment,adminListFiles,adminRemoveFile,adminReadFile"
     "adminListStudents,deleteMyRecording,verifyUpload,trackRecordingAlerts"
-    "trackPracticeLog,dailyRetention"
+    "trackPracticeLog,trackReplyAlerts,dailyRetention"
   )
 fi
 for group in "${FUNCTION_GROUPS[@]}"; do

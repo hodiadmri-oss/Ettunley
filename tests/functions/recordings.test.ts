@@ -143,3 +143,26 @@ describe('practice summary on the student profile', () => {
     expect(await docExists(`users/${w.S}`)).toBe(false)
   })
 })
+
+describe('reply alerts (a teacher reply the student has not read)', () => {
+  const alertPath = (aid: string) => `replyAlerts/${aid}_i1`
+  const comment = (aid: string, id: string) => adminDb().doc(`assignments/${aid}/items/i1/comments/${id}`)
+
+  it('an alert exists while a reply is unread, and goes when the student read it', async () => {
+    const w = await world()
+    await comment(w.aid, 'c1').set({ authorId: w.T, text: 'כל הכבוד', createdAt: Timestamp.now(), readAt: null })
+    expect(await waitFor(() => docExists(alertPath(w.aid)))).toBe(true)
+    expect(await docData(alertPath(w.aid))).toMatchObject({ teacherId: w.T, studentId: w.S, assignmentId: w.aid, itemId: 'i1', count: 1 })
+
+    await comment(w.aid, 'c1').update({ readAt: Timestamp.now() })
+    expect(await waitFor(async () => !(await docExists(alertPath(w.aid))))).toBe(true)
+  })
+
+  it('removing the student takes the alert away', async () => {
+    const w = await world()
+    await comment(w.aid, 'c1').set({ authorId: w.T, text: 'שלום', createdAt: Timestamp.now(), readAt: null })
+    expect(await waitFor(() => docExists(alertPath(w.aid)))).toBe(true)
+    await callAs(w.teacher, 'removeStudent', { studentId: w.S })
+    expect(await docExists(alertPath(w.aid))).toBe(false)
+  })
+})
