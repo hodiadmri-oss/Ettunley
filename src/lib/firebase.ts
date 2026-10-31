@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app'
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
 import { connectAuthEmulator, getAuth } from 'firebase/auth'
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
 import { connectFunctionsEmulator, getFunctions } from 'firebase/functions'
@@ -12,6 +13,15 @@ export const app = initializeApp({
   projectId: 'ettunley-61749',
   storageBucket: 'ettunley-61749.firebasestorage.app',
 })
+
+// App Check: every request carries a short-lived proof from Google (reCAPTCHA v3) that it comes
+// from this site. The site key is public (it is in every page that uses it); the secret key
+// stays in the Firebase console. Not used in local development, where the emulators run.
+// Requests are checked by the servers only once enforcement is switched on in the console.
+const RECAPTCHA_SITE_KEY = '6LdCQAouAAAAAPv5MhWFAzzzSTDYimbcjuADIjWk'
+if (!import.meta.env.DEV) {
+  initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true })
+}
 
 export const auth = getAuth(app)
 // E-mails from Firebase (password reset) are sent in Hebrew.
