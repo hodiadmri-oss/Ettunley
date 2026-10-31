@@ -72,6 +72,14 @@ export default function Settings() {
         </Link>
       </p>
 
+      {profile.role === 'student' && (
+        <p className="rounded-2xl bg-sky px-4 py-3 text-center text-base" data-testid="consent-status">
+          {profile.consentAt
+            ? `${profile.isMinor ? '✓ ההורה אישר' : '✓ אישרת שההקלטות יישמרו וישותפו עם המורה'} (${profile.consentAt.toDate().toLocaleDateString('he-IL')})`
+            : 'ההקלטות ייפתחו אחרי שההורה יאשר במייל'}
+        </p>
+      )}
+
       <section aria-labelledby="delete-title" className="flex flex-col gap-4 rounded-3xl bg-white p-4 shadow-sm">
         <h2 id="delete-title" className="text-xl font-bold">
           מחיקת החשבון שלי

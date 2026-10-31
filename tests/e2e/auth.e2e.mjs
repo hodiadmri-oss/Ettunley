@@ -1005,9 +1005,12 @@ try {
   await danaPage.reload()
   await danaPage.waitForSelector('text=✓ ההורה אישר')
   check('the teacher now sees: approved', true)
-  await yaelPage.reload()
-  await yaelPage.waitForSelector('text=✓ ההורה אישר. אפשר להקליט')
-  check('and so does the child', true)
+  await yaelPage.goto(`${BASE}/settings`)
+  await yaelPage.waitForSelector('[data-testid=consent-status]:has-text("✓ ההורה אישר")')
+  check('and the child sees it in the settings, no longer on the home screen', true)
+  await yaelPage.goto(`${BASE}/student`)
+  await yaelPage.waitForSelector('text=המטלות שלי')
+  check('the home screen has no consent banner once it is approved', (await yaelPage.locator('text=ההורה אישר').count()) === 0 && (await yaelPage.locator('text=ההקלטות ייפתחו אחרי שההורה יאשר').count()) === 0)
 
 
   // ---------- privacy page and the sign-up notice ----------

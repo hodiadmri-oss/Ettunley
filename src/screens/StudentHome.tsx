@@ -40,9 +40,6 @@ export default function StudentHome() {
           ההקלטות ייפתחו אחרי שההורה יאשר במייל
         </p>
       )}
-      {profile.isMinor && profile.consentAt && (
-        <p className="rounded-2xl bg-sky px-4 py-4 text-center text-base">✓ ההורה אישר. אפשר להקליט</p>
-      )}
       <StudentAssignments />
       <HomeFooter />
     </Screen>
