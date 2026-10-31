@@ -5,9 +5,9 @@ whenever you talk about inviting more teachers. Tick items as you finish them.
 
 ## Before the MVP goes live with the 2–5 teachers you know (phase 7)
 
-- [ ] Budget alert has several thresholds and goes to an inbox you really read.
-- [ ] Your Google account (the Firebase project owner) has 2-step verification, ideally a passkey or security key.
-- [ ] App Check is switched on; backups are switched on (Claude walks you through it).
+- [x] Budget alert has several thresholds and goes to an inbox you really read.
+- [x] Your Google account (the Firebase project owner) has 2-step verification, ideally a passkey or security key.
+- [ ] App Check is switched on. (Backups are done: weekly on Sunday, kept 28 days. The old daily schedule was deleted on 31 Oct 2026; backups it already made disappear by themselves within 98 days.)  Tell the lawyer: deleted data can stay in a backup for up to 28 days (older ones, up to 98). Backups are switched on (Claude walks you through it).
 - [ ] The password-reset e-mail (Firebase console > Authentication > Templates): Hebrew text, a friendly sender name, and check that it does not land in spam. Later it can be sent from your own domain.
 - [ ] **Deployment extras for deletion** (Claude does them with you in the go-live step): the daily clean-up that deletes recordings after 12 months needs Google's scheduler switched on, and the database index file `firestore.indexes.json` deployed. Check once after launch that an old test recording really disappears.
 - [ ] **Parent e-mails go out for real** (Claude walks you through it, step by step): an account with the e-mail service (Resend), a sending address, and the API key stored as a Functions secret. Until then nothing is sent: in the emulator the e-mail is only stored. Also set the two production settings `APP_URL` (the app's web address, used in the link) and `EMAIL_FROM`.
